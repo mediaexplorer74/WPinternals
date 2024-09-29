@@ -18,7 +18,7 @@ After unlocking your bootloader you will be able to notably perform the followin
 
 ## How some dev to get started?
 - git clone --recursive https://github.com/ReneLergner/WPinternals for latest version research.
-- or download [https://github.com/ReneLergner/WPinternals/releases/tag/2.6](v2.6) to research some "minimal case".
+- or download [v2.6](https://github.com/ReneLergner/WPinternals/releases/tag/2.6) to research some "minimal case".
 - start your VS 2022 as/under Administrator, then open WPInternal solution.
 - try to connect your Lumia device (for example, Lumia 950 with W10M "Andromeda") and start WPI debugging :)
 - ? (to be continued...) 
