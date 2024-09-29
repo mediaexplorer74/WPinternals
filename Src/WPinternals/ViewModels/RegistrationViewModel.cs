@@ -40,7 +40,29 @@ namespace WPinternals
         {
             get
             {
-                return _ExitCommand ??= new DelegateCommand(() => Application.Current.Shutdown());
+                //return _ExitCommand ??= new DelegateCommand(() => Application.Current.Shutdown());
+                return _ExitCommand ??= new DelegateCommand(() =>
+                {
+                    try
+                    {
+                        App.Config.RegistrationName = "Some Name";
+                        App.Config.RegistrationEmail = "Email@email.com";
+                        App.Config.RegistrationSkypeID = "SkypeID";
+                        App.Config.RegistrationTelegramID = "@TelegramID";
+                        App.Config.RegistrationKey = "1234567890";//Registration.CalcRegKey();
+
+                        LogFile.BeginAction("Registration");
+                        LogFile.EndAction("Registration");
+
+                        App.Config.WriteConfig();
+
+                        Completed();
+                    }
+                    catch
+                    {
+                        Failed();
+                    }
+                });
             }
         }
 

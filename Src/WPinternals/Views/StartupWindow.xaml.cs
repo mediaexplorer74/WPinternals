@@ -45,11 +45,13 @@ namespace WPinternals
                 Registry.CurrentUser.OpenSubKey("Software", true).CreateSubKey("WPInternals");
             }
 
-            if (Registration.IsPrerelease && (Registry.CurrentUser.OpenSubKey("Software\\WPInternals").GetValue("NdaAccepted") == null))
+            if (Registration.IsPrerelease && (Registry.CurrentUser.OpenSubKey(
+                "Software\\WPInternals").GetValue("NdaAccepted") == null))
             {
                 NeedLicenseAgrement = true;
             }
-            else if (Registry.CurrentUser.OpenSubKey("Software\\WPInternals").GetValue("DisclaimerAccepted") == null)
+            else if (Registry.CurrentUser.OpenSubKey("Software\\WPInternals")
+                .GetValue("DisclaimerAccepted") == null)
             {
                 NeedLicenseAgrement = true;
             }
@@ -58,7 +60,9 @@ namespace WPinternals
             {
                 // USB communication uses Windows Messages and therefore the MainViewModel
                 // can only be created after the Main Window was initialized.
-                System.Threading.SynchronizationContext UIContext = System.Threading.SynchronizationContext.Current;
+                System.Threading.SynchronizationContext UIContext 
+                    = System.Threading.SynchronizationContext.Current;
+
                 await CommandLine.ParseCommandLine(UIContext);
             }
             else if (Environment.GetCommandLineArgs().Length > 1)
