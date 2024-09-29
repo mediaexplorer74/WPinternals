@@ -21,8 +21,8 @@ After unlocking your bootloader you will be able to notably perform the followin
 - Additional projects extracted (trancated/cutted) from solution and moved to Extra folder
 
 ## How some dev to get started?
-- git clone --recursive https://github.com/ReneLergner/WPinternals, or download [https://github.com/ReneLergner/WPinternals/releases/tag/3.0-preview2](latest 3.0-preview2) for your own code research.
-- or download [https://github.com/ReneLergner/WPinternals/releases/tag/2.6](v2.6) to research some "minimal case" to better/faster undestand "app logic".
+- git clone --recursive https://github.com/ReneLergner/WPinternals, or download [latest 3.0-preview2](https://github.com/ReneLergner/WPinternals/releases/tag/3.0-preview2) for your own code research.
+- or download [v2.6](https://github.com/ReneLergner/WPinternals/releases/tag/2.6) to research some "minimal case" to better/faster undestand "app logic".
 - start your VS 2022 as/under Administrator, then open WPInternal solution.
 - try to connect your Lumia device (for example, Lumia 950 with W10M "Andromeda") and start WPI debugging :)
 - ? (to be continued...) 
