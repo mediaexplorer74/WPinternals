@@ -5,8 +5,8 @@ Windows Phone Internals (WPinternals or WPI for short) is a tool designed to unl
 Thanks to specifically crafted exploits/techniques the tool is able to disable Bootloader Security/SecureBoot on select Lumia models.
 
 ## Screenshots
-![WPI 2.6](Images/shot01.png)
-![WPI Debugging](Images/shot01.png)
+![WPI 2.6](Images/shot1.png)
+![WPI Debugging](Images/shot2.png)
 
 ## What is it / what it could be? (future plans / scenario)
 After unlocking your bootloader you will be able to notably perform the following actions:
