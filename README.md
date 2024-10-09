@@ -1,4 +1,6 @@
-# Windows Phone Internals 2.6-rnd
+# Windows Phone Internals 2.6-rnd branch
+
+My fork of famous WPinternals project for my own Andromeda-related RnD.
 
 ## About the original
 Windows Phone Internals (WPinternals or WPI for short) is a tool designed to unlock the bootloader and/or secure boot of select Lumia devices made by Nokia and Microsoft.
@@ -17,10 +19,9 @@ After unlocking your bootloader you will be able to notably perform the followin
 - Access your phone internal storage over USB
 
 ## How some dev to get started?
-- git clone --recursive https://github.com/ReneLergner/WPinternals for latest version research.
-- or download [v2.6](https://github.com/ReneLergner/WPinternals/releases/tag/2.6) to research some "minimal case".
+- git clone --recursive https://github.com/mediaexplorer74/WPinternals for your own research.
 - start your VS 2022 as/under Administrator, then open WPInternal solution.
-- try to connect your Lumia device (for example, Lumia 950 with W10M "Andromeda") and start WPI debugging :)
+- try to connect your some Lumia device  and start WPI debugging :)
 - ? (to be continued...) 
 
 ## Credits
