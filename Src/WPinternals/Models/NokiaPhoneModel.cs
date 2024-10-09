@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -19,19 +19,21 @@
 // DEALINGS IN THE SOFTWARE.
 
 using MadWizard.WinUSBNet;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
-using System.Text.Json;
 
 namespace WPinternals
 {
-    internal class NokiaPhoneModel : IDisposable
+    internal class NokiaPhoneModel: IDisposable
     {
         protected bool Disposed = false;
-        private readonly USBDevice Device = null;
+        private USBDevice Device = null;
         private int MessageId = 0;
-        private readonly object UsbLock = new();
+        private object UsbLock = new object();
 
         public NokiaPhoneModel(string DevicePath)
         {
@@ -40,177 +42,125 @@ namespace WPinternals
             {
                 Device = new USBDevice(DevicePath);
             }
-            catch (Exception ex)
-            {
-                LogFile.LogException(ex, LogType.FileOnly);
-            }
+            catch { }
         }
 
-        private JsonElement? ExecuteJsonMethodAsJsonToken(string JsonMethod, Dictionary<string, object> Params, string ResultElement)
+        private JToken ExecuteJsonMethodAsJsonToken(string JsonMethod, Dictionary<string, object> Params, string ResultElement)
         {
             byte[] Buffer;
             int Length;
 
             lock (UsbLock)
             {
-                const string jsonrpc = "2.0";
+                string jsonrpc = "2.0";
                 int id = MessageId++;
                 string method = JsonMethod;
-                Dictionary<string, object> @params = new();
+                Dictionary<string, object> @params = new Dictionary<string, object>();
                 if (Params != null)
                 {
                     foreach (KeyValuePair<string, object> Param in Params)
                     {
-                        if (Param.Value is byte[] v)
-                        {
-                            @params.Add(Param.Key, v.Select(b => (int)b).ToArray()); // convert to int-array
-                        }
+                        if (Param.Value is byte[])
+                            @params.Add(Param.Key, ((byte[])Param.Value).Select(b => (int)b).ToArray()); // convert to int-array
                         else
-                        {
                             @params.Add(Param.Key, Param.Value);
-                        }
                     }
                 }
                 @params.Add("MessageVersion", 0);
-                string Request = JsonSerializer.Serialize(new { jsonrpc, id, method, @params });
+                string Request = JsonConvert.SerializeObject(new { jsonrpc, id, method, @params });
                 Device.OutputPipe.Write(System.Text.Encoding.ASCII.GetBytes(Request));
 
                 Buffer = new byte[0x10000];
                 Length = Device.InputPipe.Read(Buffer);
             }
 
-            JsonDocument ResultMessage = JsonDocument.Parse(System.Text.Encoding.ASCII.GetString(Buffer, 0, Length));
+            Newtonsoft.Json.Linq.JObject ResultMessage = Newtonsoft.Json.Linq.JObject.Parse(System.Text.ASCIIEncoding.ASCII.GetString(Buffer, 0, Length));
 
-            try
-            {
-                JsonElement? ResultToken = ResultMessage.RootElement.GetProperty("result");
-                if ((ResultToken == null) || (ResultElement == null))
-                {
-                    return null;
-                }
-
-                return ResultToken.Value.GetProperty(ResultElement);
-            }
-            catch
-            {
-                return null;
-            }
+            JToken ResultToken = ResultMessage.Root.SelectToken("result");
+            if ((ResultToken == null) || (ResultElement == null)) return null;
+            return ResultToken.SelectToken(ResultElement);
         }
 
         public void ExecuteJsonMethod(string JsonMethod, Dictionary<string, object> Params)
         {
-            _ = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, null);
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, null);
         }
 
         public string ExecuteJsonMethodAsString(string JsonMethod, Dictionary<string, object> Params, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, ResultElement);
-            if (Token == null)
-            {
-                return null;
-            }
-
-            return Token.Value.GetString();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, ResultElement);
+            if (Token == null) return null;
+            return Token.Value<string>();
         }
 
         public string ExecuteJsonMethodAsString(string JsonMethod, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
-            if (Token == null)
-            {
-                return null;
-            }
-
-            return Token.Value.GetString();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
+            if (Token == null) return null;
+            return Token.Value<string>();
         }
 
         public int ExecuteJsonMethodAsInteger(string JsonMethod, Dictionary<string, object> Params, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, ResultElement);
-            if (Token == null)
-            {
-                return 0;
-            }
-
-            return Token.Value.GetInt32();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, ResultElement);
+            if (Token == null) return 0;
+            return Token.Value<int>();
         }
 
         public int ExecuteJsonMethodAsInteger(string JsonMethod, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
-            if (Token == null)
-            {
-                return 0;
-            }
-
-            return Token.Value.GetInt32();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
+            if (Token == null) return 0;
+            return Token.Value<int>();
         }
 
         public byte[] ExecuteJsonMethodAsBytes(string JsonMethod, Dictionary<string, object> Params, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, ResultElement);
-            if (Token == null)
-            {
-                return null;
-            }
-
-            return Token.Value.EnumerateArray().Select(x => x.GetByte()).ToArray();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, Params, ResultElement);
+            if (Token == null) return null;
+            return Token.Values<byte>().ToArray();
         }
 
         public byte[] ExecuteJsonMethodAsBytes(string JsonMethod, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
-            if (Token == null)
-            {
-                return null;
-            }
-
-            return Token.Value.EnumerateArray().Select(x => x.GetByte()).ToArray();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
+            if (Token == null) return null;
+            return Token.Values<byte>().ToArray();
         }
 
         public bool? ExecuteJsonMethodAsBoolean(string JsonMethod, string ResultElement)
         {
-            JsonElement? Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
-            if (Token == null)
-            {
-                return null;
-            }
-
-            if (Token.Value.ValueKind == JsonValueKind.String)
-            {
-                return Token.Value.GetString().Equals("true", StringComparison.InvariantCultureIgnoreCase);
-            }
-
-            return Token.Value.GetBoolean();
+            JToken Token = ExecuteJsonMethodAsJsonToken(JsonMethod, null, ResultElement);
+            if (Token == null) return null;
+            return Token.Value<bool>();
         }
 
         public void ExecuteJsonMethodAsync(string JsonMethod, Dictionary<string, object> Params)
         {
             lock (UsbLock)
             {
-                const string jsonrpc = "2.0";
+                string jsonrpc = "2.0";
                 int id = MessageId++;
                 string method = JsonMethod;
-                Dictionary<string, object> @params = new();
+                Dictionary<string, object> @params = new Dictionary<string, object>();
                 if (Params != null)
                 {
                     foreach (KeyValuePair<string, object> Param in Params)
                     {
-                        if (Param.Value is byte[] v)
-                        {
-                            @params.Add(Param.Key, v.Select(b => (int)b).ToArray()); // convert to int-array
-                        }
+                        if (Param.Value is byte[])
+                            @params.Add(Param.Key, ((byte[])Param.Value).Select(b => (int)b).ToArray()); // convert to int-array
                         else
-                        {
                             @params.Add(Param.Key, Param.Value);
-                        }
                     }
                 }
                 @params.Add("MessageVersion", 0);
-                string Request = JsonSerializer.Serialize(new { jsonrpc, id, method, @params });
+                string Request = JsonConvert.SerializeObject(new { jsonrpc, id, method, @params });
 
                 byte[] OutBuffer = System.Text.Encoding.ASCII.GetBytes(Request);
-                Device.OutputPipe.BeginWrite(OutBuffer, 0, OutBuffer.Length, (AsyncResultWrite) => Device.OutputPipe.EndWrite(AsyncResultWrite), null);
+                Device.OutputPipe.BeginWrite(OutBuffer, 0, OutBuffer.Length, (AsyncResultWrite) =>
+                {
+                    Device.OutputPipe.EndWrite(AsyncResultWrite);
+                }, null);
             }
         }
 
@@ -223,51 +173,51 @@ namespace WPinternals
 
         public void ExecuteJsonMethodAsStringAsync(string JsonMethod, Dictionary<string, object> Params, string ResultElement, object State, JsonMethodCallbackString Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.GetRawText()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Value<string>()); });
         }
 
         public void ExecuteJsonMethodAsStringAsync(string JsonMethod, string ResultElement, object State, JsonMethodCallbackString Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.GetRawText()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Value<string>()); });
         }
 
         public delegate void JsonMethodCallbackBoolean(object State, bool Result);
 
         public void ExecuteJsonMethodAsBooleanAsync(string JsonMethod, Dictionary<string, object> Params, string ResultElement, object State, JsonMethodCallbackBoolean Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.GetBoolean()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Value<bool>()); });
         }
 
         public void ExecuteJsonMethodAsBooleanAsync(string JsonMethod, string ResultElement, object State, JsonMethodCallbackBoolean Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.GetBoolean()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Value<bool>()); });
         }
 
         public delegate void JsonMethodCallbackBytes(object State, byte[] Result);
 
         public void ExecuteJsonMethodAsBytesAsync(string JsonMethod, Dictionary<string, object> Params, string ResultElement, object State, JsonMethodCallbackBytes Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.EnumerateArray().Select(x => x.GetByte()).ToArray()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Values<byte>().ToArray()); });
         }
 
         public void ExecuteJsonMethodAsBytesAsync(string JsonMethod, string ResultElement, object State, JsonMethodCallbackBytes Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.EnumerateArray().Select(x => x.GetByte()).ToArray()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Values<byte>().ToArray()); });
         }
 
         public delegate void JsonMethodCallbackInteger(object State, int Result);
 
         public void ExecuteJsonMethodAsIntegerAsync(string JsonMethod, Dictionary<string, object> Params, string ResultElement, object State, JsonMethodCallbackInteger Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.GetInt32()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, Params, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Value<int>()); });
         }
 
         public void ExecuteJsonMethodAsIntegerAsync(string JsonMethod, string ResultElement, object State, JsonMethodCallbackInteger Callback)
         {
-            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => Callback(ReturnState, Token.Value.GetInt32()));
+            ExecuteJsonMethodAsTokenAsync(JsonMethod, null, ResultElement, State, (ReturnState, Token) => { Callback(ReturnState, Token.Value<int>()); });
         }
 
-        public delegate void JsonMethodCallbackToken(object State, JsonElement? Result);
+        public delegate void JsonMethodCallbackToken(object State, JToken Result);
 
         public void ExecuteJsonMethodAsTokenAsync(string JsonMethod, Dictionary<string, object> Params, string ResultElement, object State, JsonMethodCallbackToken Callback)
         {
@@ -276,26 +226,22 @@ namespace WPinternals
 
             lock (UsbLock)
             {
-                const string jsonrpc = "2.0";
+                string jsonrpc = "2.0";
                 int id = MessageId++;
                 string method = JsonMethod;
-                Dictionary<string, object> @params = new();
+                Dictionary<string, object> @params = new Dictionary<string, object>();
                 if (Params != null)
                 {
                     foreach (KeyValuePair<string, object> Param in Params)
                     {
-                        if (Param.Value is byte[] v)
-                        {
-                            @params.Add(Param.Key, v.Select(b => (int)b).ToArray()); // convert to int-array
-                        }
+                        if (Param.Value is byte[])
+                            @params.Add(Param.Key, ((byte[])Param.Value).Select(b => (int)b).ToArray()); // convert to int-array
                         else
-                        {
                             @params.Add(Param.Key, Param.Value);
-                        }
                     }
                 }
                 @params.Add("MessageVersion", 0);
-                string Request = JsonSerializer.Serialize(new { jsonrpc, id, method, @params });
+                string Request = JsonConvert.SerializeObject(new { jsonrpc, id, method, @params });
 
                 byte[] OutBuffer = System.Text.Encoding.ASCII.GetBytes(Request);
                 Device.OutputPipe.BeginWrite(OutBuffer, 0, OutBuffer.Length, (AsyncResultWrite) =>
@@ -306,15 +252,11 @@ namespace WPinternals
                             {
                                 Length = Device.InputPipe.EndRead(AsyncResultRead);
 
-                                JsonDocument ResultMessage = JsonDocument.Parse(System.Text.Encoding.ASCII.GetString(Buffer, 0, Length));
+                                Newtonsoft.Json.Linq.JObject ResultMessage = Newtonsoft.Json.Linq.JObject.Parse(System.Text.ASCIIEncoding.ASCII.GetString(Buffer, 0, Length));
 
-                                JsonElement? ResultToken = ResultMessage.RootElement.GetProperty("result");
-                                if ((ResultToken == null) || (ResultElement == null))
-                                {
-                                    Callback(AsyncResultRead.AsyncState, null);
-                                }
-
-                                Callback(AsyncResultRead.AsyncState, ResultToken.Value.GetProperty(ResultElement));
+                                JToken ResultToken = ResultMessage.Root.SelectToken("result");
+                                if ((ResultToken == null) || (ResultElement == null)) Callback(AsyncResultRead.AsyncState, null);
+                                Callback(AsyncResultRead.AsyncState, ResultToken.SelectToken(ResultElement));
                             }, AsyncResultWrite.AsyncState);
                     }, State);
             }
@@ -336,17 +278,30 @@ namespace WPinternals
             byte[] Result = null;
             lock (UsbLock)
             {
-                Device.OutputPipe.Write(RawMethod, 0, Length);
                 try
                 {
-                    int OutputLength = Device.InputPipe.Read(Buffer);
+                    if (Device !=null)
+                      Device.OutputPipe.Write(RawMethod, 0, Length);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("[ex] Device.OutputPipe.Write error: " + ex.Message);
+                }
+
+                try
+                {
+                    int OutputLength = 0;
+
+                    if (Device != null)
+                        OutputLength = Device.InputPipe.Read(Buffer);
+
                     Result = new byte[OutputLength];
                     System.Buffer.BlockCopy(Buffer, 0, Result, 0, OutputLength);
                 }
-                catch (Exception ex) // Reboot command looses connection
+                catch (Exception ex2)
                 {
-                    LogFile.LogException(ex, LogType.FileOnly);
-                }
+                    Debug.WriteLine("[ex] Device.InputPipe.Read error: " + ex2.Message);
+                } // Reboot command looses connection
             }
             return Result;
         }
@@ -361,22 +316,6 @@ namespace WPinternals
             lock (UsbLock)
             {
                 Device.OutputPipe.Write(RawMethod, 0, Length);
-            }
-        }
-
-        public void ResetDevice()
-        {
-            try
-            {
-                foreach (var pipe in Device.Pipes)
-                {
-                    pipe.Abort();
-                    pipe.Reset();
-                }
-            }
-            catch (Exception ex)
-            {
-                LogFile.LogException(ex, LogType.FileOnly);
             }
         }
 
@@ -408,13 +347,12 @@ namespace WPinternals
         protected virtual void Dispose(bool disposing)
         {
             if (Disposed)
-            {
                 return;
-            }
 
             if (disposing)
             {
-                Device?.Dispose();
+                if (Device != null)
+                    Device.Dispose();
             }
 
             // Clean unmanaged resources here.

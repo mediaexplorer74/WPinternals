@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -18,7 +18,6 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -37,29 +36,21 @@ namespace WPinternals
 
         private void HandleHyperlinkClick(object sender, RoutedEventArgs args)
         {
-            if (args.Source is Hyperlink link)
+            Hyperlink link = args.Source as Hyperlink;
+            if (link != null)
             {
                 if (link.NavigateUri.ToString() == "Flash")
-                {
                     ((FlashResourcesViewModel)DataContext).SwitchToFlashRom();
-                }
                 else if (link.NavigateUri.ToString() == "Download")
-                {
                     ((FlashResourcesViewModel)DataContext).SwitchToDownload();
-                }
                 else
-                {
-                    Process process = new();
-                    process.StartInfo.UseShellExecute = true;
-                    process.StartInfo.FileName = link.NavigateUri.AbsoluteUri;
-                    process.Start();
-                }
+                    System.Diagnostics.Process.Start(link.NavigateUri.ToString());
             }
         }
 
         private void Document_Loaded(object sender, RoutedEventArgs e)
         {
-            (sender as FlowDocument)?.AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(HandleHyperlinkClick));
+            (sender as FlowDocument).AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(HandleHyperlinkClick));
         }
     }
 }

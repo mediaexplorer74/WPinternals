@@ -1,12 +1,14 @@
-# Windows Phone Internals 3-preview2
+# Windows Phone Internals - andromeda branch
+
+My WPI2.6-based "fork" , special for Windows Core 17686build (mobile os)
 
 ## About the original
 Windows Phone Internals (WPinternals or WPI for short) is a tool designed to unlock the bootloader and/or secure boot of select Lumia devices made by Nokia and Microsoft.
 Thanks to specifically crafted exploits/techniques the tool is able to disable Bootloader Security/SecureBoot on select Lumia models.
 
 ## Screenshots
-![WPI 3-preview2](Images/shot01.png)
-![WPI Debugging](Images/shot02.png)
+![WPI 2.6](Images/shot1.png)
+![WPI Debugging](Images/shot2.png)
 
 ## What is it / what it could be? (future plans / scenario)
 After unlocking your bootloader you will be able to notably perform the following actions:
@@ -16,16 +18,11 @@ After unlocking your bootloader you will be able to notably perform the followin
 - Backup your current Windows Phone ROM
 - Access your phone internal storage over USB
 
-## Tech. details
-- NET 8.0 used
-- Additional projects extracted (trancated/cutted) from solution and moved to Extra folder
-
 ## How some dev to get started?
-- git clone --recursive https://github.com/ReneLergner/WPinternals, or download [latest 3.0-preview2](https://github.com/ReneLergner/WPinternals/releases/tag/3.0-preview2) for your own code research.
-- or download [v2.6](https://github.com/ReneLergner/WPinternals/releases/tag/2.6) to research some "minimal case" to better/faster undestand "app logic".
+- git clone --recursive https://github.com/mediaexplorer74/WPinternals
 - start your VS 2022 as/under Administrator, then open WPInternal solution.
 - try to connect your Lumia device (for example, Lumia 950 with W10M "Andromeda") and start WPI debugging :)
-- ? (to be continued...) 
+- research continous "Waiting device connection" problem and try to fix it...  
 
 ## Credits
 - https://github.com/ReneLergner Rene Lergner, Gustave Monce & other great C# dev

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -25,11 +25,11 @@ namespace WPinternals
 {
     internal class RegistrationViewModel : ContextViewModel
     {
-        private readonly Action Completed;
-        private readonly Action Failed;
+        Action Completed;
+        Action Failed;
 
         internal RegistrationViewModel(Action Completed, Action Failed)
-            : base()
+            : base() 
         {
             this.Completed = Completed;
             this.Failed = Failed;
@@ -40,29 +40,14 @@ namespace WPinternals
         {
             get
             {
-                //return _ExitCommand ??= new DelegateCommand(() => Application.Current.Shutdown());
-                return _ExitCommand ??= new DelegateCommand(() =>
+                if (_ExitCommand == null)
                 {
-                    try
+                    _ExitCommand = new DelegateCommand(() =>
                     {
-                        App.Config.RegistrationName = "Some Name";
-                        App.Config.RegistrationEmail = "Email@email.com";
-                        App.Config.RegistrationSkypeID = "SkypeID";
-                        App.Config.RegistrationTelegramID = "@TelegramID";
-                        App.Config.RegistrationKey = "1234567890";//Registration.CalcRegKey();
-
-                        LogFile.BeginAction("Registration");
-                        LogFile.EndAction("Registration");
-
-                        App.Config.WriteConfig();
-
-                        Completed();
-                    }
-                    catch
-                    {
-                        Failed();
-                    }
-                });
+                        Application.Current.Shutdown();
+                    });
+                }
+                return _ExitCommand;
             }
         }
 
@@ -71,7 +56,9 @@ namespace WPinternals
         {
             get
             {
-                return _ContinueCommand ??= new DelegateCommand(() =>
+                if (_ContinueCommand == null)
+                {
+                    _ContinueCommand = new DelegateCommand(() =>
                     {
                         try
                         {
@@ -93,6 +80,8 @@ namespace WPinternals
                             Failed();
                         }
                     });
+                }
+                return _ContinueCommand;
             }
         }
 
@@ -100,7 +89,7 @@ namespace WPinternals
         {
             get
             {
-                return (_Name?.Length >= 2) && (_Email?.Length >= 5);
+                return ((_Name != null) && (_Name.Length >= 2) && (_Email != null) && (_Email.Length >= 5));
             }
         }
 
@@ -114,8 +103,8 @@ namespace WPinternals
             set
             {
                 _Name = value;
-                OnPropertyChanged(nameof(Name));
-                OnPropertyChanged(nameof(IsRegistrationComplete));
+                OnPropertyChanged("Name");
+                OnPropertyChanged("IsRegistrationComplete");
             }
         }
 
@@ -129,8 +118,8 @@ namespace WPinternals
             set
             {
                 _Email = value;
-                OnPropertyChanged(nameof(Email));
-                OnPropertyChanged(nameof(IsRegistrationComplete));
+                OnPropertyChanged("Email");
+                OnPropertyChanged("IsRegistrationComplete");
             }
         }
 
@@ -144,7 +133,7 @@ namespace WPinternals
             set
             {
                 _SkypeID = value;
-                OnPropertyChanged(nameof(SkypeID));
+                OnPropertyChanged("SkypeID");
             }
         }
 
@@ -158,7 +147,7 @@ namespace WPinternals
             set
             {
                 _TelegramID = value;
-                OnPropertyChanged(nameof(TelegramID));
+                OnPropertyChanged("TelegramID");
             }
         }
     }

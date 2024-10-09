@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,7 @@ namespace WPinternals
 
     internal class QualcommFlasher
     {
-        private readonly QualcommSerial Serial;
+        private QualcommSerial Serial;
 
         public QualcommFlasher(QualcommSerial Serial)
         {
@@ -45,37 +45,41 @@ namespace WPinternals
 
         public void Hello()
         {
-            byte[] Command =
-            [
+            byte[] Command = new byte[]
+            {
                 0x01, // Hello command
                 0x51, 0x43, 0x4F, 0x4D, 0x20, 0x66, 0x61, 0x73, 0x74, 0x20, 0x64, 0x6F, 0x77, 0x6E, 0x6C, 0x6F, // "QCOM fast download protocol host"
                 0x61, 0x64, 0x20, 0x70, 0x72, 0x6F, 0x74, 0x6F, 0x63, 0x6F, 0x6C, 0x20, 0x68, 0x6F, 0x73, 0x74,
                 0x02,
                 0x02, // Protocol version - Must be at least 0x02
                 0x01
-            ];
+            };
 
-            Serial.SendCommand(Command, [0x02]);
+            Serial.SendCommand(Command, new byte[] { 0x02 });
         }
 
         public void SetSecurityMode(byte Mode)
         {
-            byte[] Command = [0x17, Mode];
+            byte[] Command = new byte[2];
+            Command[0] = 0x17;
+            Command[1] = Mode;
 
-            Serial.SendCommand(Command, [0x18]);
+            Serial.SendCommand(Command, new byte[] { 0x18 });
         }
 
         // Use PartitionID 0x21
         public void OpenPartition(byte PartitionID)
         {
-            byte[] Command = [0x1B, PartitionID];
+            byte[] Command = new byte[2];
+            Command[0] = 0x1B;
+            Command[1] = PartitionID;
 
-            Serial.SendCommand(Command, [0x1C]);
+            Serial.SendCommand(Command, new byte[] { 0x1C });
         }
 
         public void ClosePartition()
         {
-            Serial.SendCommand([0x15], [0x16]);
+            Serial.SendCommand(new byte[] { 0x15 }, new byte[] { 0x16 });
         }
 
         public void Flash(UInt32 StartInBytes, Stream Data, UInt32 LengthInBytes = UInt32.MaxValue)
@@ -95,9 +99,11 @@ namespace WPinternals
 
         public void Flash(UInt32 StartInBytes, Stream Data, Action<int, TimeSpan?> ProgressUpdateCallback, ProgressUpdater UpdaterPerSector, UInt32 LengthInBytes = UInt32.MaxValue)
         {
-            long Remaining = (LengthInBytes == UInt32.MaxValue) || (LengthInBytes > (Data.Length - Data.Position))
-                ? Data.Length - Data.Position
-                : LengthInBytes;
+            long Remaining;
+            if ((LengthInBytes == UInt32.MaxValue) || (LengthInBytes > (Data.Length - Data.Position)))
+                Remaining = Data.Length - Data.Position;
+            else
+                Remaining = LengthInBytes;
             UInt32 CurrentLength;
             byte[] Buffer = new byte[0x405];
             byte[] ResponsePattern = new byte[5];
@@ -108,16 +114,17 @@ namespace WPinternals
 
             ProgressUpdater Progress = UpdaterPerSector;
             if ((Progress == null) && (ProgressUpdateCallback != null))
-            {
                 Progress = new ProgressUpdater(GetSectorCount((UInt64)Remaining), ProgressUpdateCallback);
-            }
 
             while (Remaining > 0)
             {
                 System.Buffer.BlockCopy(BitConverter.GetBytes(CurrentPosition), 0, Buffer, 1, 4); // Start is in bytes and in Little Endian (on Samsung devices start is in sectors!)
                 System.Buffer.BlockCopy(BitConverter.GetBytes(CurrentPosition), 0, ResponsePattern, 1, 4); // Start is in bytes and in Little Endian (on Samsung devices start is in sectors!)
 
-                CurrentLength = Remaining >= 0x400 ? 0x400 : (UInt32)Remaining;
+                if (Remaining >= 0x400)
+                    CurrentLength = 0x400;
+                else
+                    CurrentLength = (UInt32)Remaining;
 
                 CurrentLength = (uint)Data.Read(Buffer, 5, (int)CurrentLength);
 
@@ -127,16 +134,15 @@ namespace WPinternals
                     System.Buffer.BlockCopy(Buffer, 0, FinalCommand, 0, (int)CurrentLength + 5);
                 }
                 else
-                {
                     FinalCommand = Buffer;
-                }
 
                 Serial.SendCommand(FinalCommand, ResponsePattern);
 
                 CurrentPosition += CurrentLength;
                 Remaining -= CurrentLength;
 
-                Progress?.IncreaseProgress(GetSectorCount(CurrentLength));
+                if (Progress != null)
+                    Progress.IncreaseProgress(GetSectorCount(CurrentLength));
             }
         }
 
@@ -159,14 +165,11 @@ namespace WPinternals
         {
             long RemainingBytes;
             if (OffsetInBytes > (Data.Length - 1))
-            {
                 throw new ArgumentException("Wrong offset");
-            }
-
-            RemainingBytes = (LengthInBytes == UInt32.MaxValue) || (LengthInBytes > (Data.Length - OffsetInBytes))
-                ? Data.Length - OffsetInBytes
-                : LengthInBytes;
-
+            if ((LengthInBytes == UInt32.MaxValue) || (LengthInBytes > (Data.Length - OffsetInBytes)))
+                RemainingBytes = Data.Length - OffsetInBytes;
+            else
+                RemainingBytes = LengthInBytes;
             UInt32 CurrentLength;
             UInt32 CurrentOffset = OffsetInBytes;
             byte[] Buffer = new byte[0x405];
@@ -178,17 +181,17 @@ namespace WPinternals
 
             ProgressUpdater Progress = UpdaterPerSector;
             if ((Progress == null) && (ProgressUpdateCallback != null))
-            {
                 Progress = new ProgressUpdater(GetSectorCount((UInt64)RemainingBytes), ProgressUpdateCallback);
-            }
 
             while (RemainingBytes > 0)
             {
                 System.Buffer.BlockCopy(BitConverter.GetBytes(CurrentPosition), 0, Buffer, 1, 4); // Start position is in bytes and in Little Endian (on Samsung phones the start position is in Sectors!!)
                 System.Buffer.BlockCopy(BitConverter.GetBytes(CurrentPosition), 0, ResponsePattern, 1, 4); // Start position is in bytes and in Little Endian (on Samsung phones the start position is in Sectors!!)
 
-                CurrentLength = RemainingBytes >= 0x400 ? 0x400 : (UInt32)RemainingBytes;
-
+                if (RemainingBytes >= 0x400)
+                    CurrentLength = 0x400;
+                else
+                    CurrentLength = (UInt32)RemainingBytes;
                 System.Buffer.BlockCopy(Data, (int)CurrentOffset, Buffer, 5, (int)CurrentLength);
 
                 if (CurrentLength < 0x400)
@@ -197,9 +200,7 @@ namespace WPinternals
                     System.Buffer.BlockCopy(Buffer, 0, FinalCommand, 0, (int)CurrentLength + 5);
                 }
                 else
-                {
                     FinalCommand = Buffer;
-                }
 
                 Serial.SendCommand(FinalCommand, ResponsePattern);
 
@@ -207,18 +208,19 @@ namespace WPinternals
                 CurrentOffset += CurrentLength;
                 RemainingBytes -= CurrentLength;
 
-                Progress?.IncreaseProgress(GetSectorCount(CurrentLength));
+                if (Progress != null)
+                    Progress.IncreaseProgress(GetSectorCount(CurrentLength));
             }
         }
 
         public UInt64 GetSectorCount(UInt64 ByteCount)
         {
-            return (ByteCount / 0x200) + ((ByteCount % 0x200) > 0 ? 1 : (UInt64)0);
+            return (ByteCount / 0x200) + ((ByteCount % 0x200) > 0 ? (UInt64)1 : (UInt64)0);
         }
 
         public void Reboot()
         {
-            Serial.SendCommand([0x0B], [0x0C]);
+            Serial.SendCommand(new byte[] { 0x0B }, new byte[] { 0x0C });
         }
     }
 }

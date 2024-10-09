@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ namespace WPinternals
         internal PhoneInterfaces? CurrentInterface;
         internal IDisposable CurrentModel;
         internal PhoneNotifierViewModel PhoneNotifier;
-        private readonly Action Callback;
+        private Action Callback;
 
         internal LumiaModeViewModel(PhoneNotifierViewModel PhoneNotifier, Action Callback)
             : base()
@@ -48,34 +48,28 @@ namespace WPinternals
             PhoneNotifier.DeviceRemoved -= DeviceRemoved;
         }
 
-        private void DeviceRemoved()
+        void DeviceRemoved()
         {
             CurrentInterface = null;
             CurrentModel = null;
 
             if (!IsSwitchingInterface)
-            {
                 ActivateSubContext(null);
-            }
         }
 
-        private void NewDeviceArrived(ArrivalEventArgs Args)
+        void NewDeviceArrived(ArrivalEventArgs Args)
         {
             CurrentInterface = Args.NewInterface;
             CurrentModel = Args.NewModel;
 
             if (!IsSwitchingInterface && IsActive)
-            {
                 Refresh();
-            }
         }
 
         internal override void EvaluateViewState()
         {
             if (!IsSwitchingInterface && IsActive)
-            {
                 Refresh();
-            }
         }
 
         private void Refresh()
@@ -84,27 +78,21 @@ namespace WPinternals
             switch (CurrentInterface)
             {
                 case null:
-                    ActivateSubContext(null);
-                    break;
                 case PhoneInterfaces.Lumia_Bootloader:
-                    ActivateSubContext(new NokiaModeBootloaderViewModel((LumiaBootManagerAppModel)CurrentModel, OnModeSwitchRequested));
-                    break;
-                case PhoneInterfaces.Lumia_PhoneInfo:
-                    ActivateSubContext(new NokiaModePhoneInfoViewModel((LumiaPhoneInfoAppModel)CurrentModel, OnModeSwitchRequested));
                     break;
                 case PhoneInterfaces.Lumia_Normal:
                     ActivateSubContext(new NokiaModeNormalViewModel((NokiaPhoneModel)CurrentModel, OnModeSwitchRequested));
                     break;
                 case PhoneInterfaces.Lumia_Flash:
-                    ActivateSubContext(new NokiaModeFlashViewModel((LumiaFlashAppModel)CurrentModel, OnModeSwitchRequested));
+                    ActivateSubContext(new NokiaModeFlashViewModel((NokiaFlashModel)CurrentModel, OnModeSwitchRequested));
                     break;
                 case PhoneInterfaces.Lumia_Label:
                     ActivateSubContext(new NokiaModeLabelViewModel((NokiaPhoneModel)CurrentModel, OnModeSwitchRequested));
                     break;
                 case PhoneInterfaces.Lumia_MassStorage:
-                    ActivateSubContext(new NokiaModeMassStorageViewModel((MassStorage)CurrentModel, OnModeSwitchRequested));
+                    ActivateSubContext(new NokiaModeMassStorageViewModel(null));
                     break;
-            }
+            };
         }
 
         // Called from eventhandler, so "async void" is valid here.
@@ -123,8 +111,7 @@ namespace WPinternals
             catch (Exception Ex)
             {
                 IsSwitchingInterface = false;
-                ActivateSubContext(new MessageViewModel(Ex.Message, () =>
-                {
+                ActivateSubContext(new MessageViewModel(Ex.Message, () => {
                     Callback();
                     Refresh();
                 }));

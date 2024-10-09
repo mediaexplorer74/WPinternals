@@ -1,0 +1,3 @@
+DevName
+
+\\?\USB#VID_045E&PID_0A02#5&192434a6&0&2#{9e3bd5f7-9690-4fcc-8810-3e2650cd6ecc}

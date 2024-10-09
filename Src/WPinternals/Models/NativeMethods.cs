@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -18,10 +18,10 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using Microsoft.Win32.SafeHandles;
 using System;
-using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
+using System.Runtime.ConstrainedExecution;
+using Microsoft.Win32.SafeHandles;
 using System.Security;
 
 namespace WPinternals
@@ -118,12 +118,14 @@ namespace WPinternals
         [DllImport(
              KERNEL32,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern bool CloseHandle(IntPtr handle);
 
         [DllImport(
              ADVAPI32,
              CharSet = CharSet.Unicode,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern bool AdjustTokenPrivileges(
             [In]     SafeTokenHandle TokenHandle,
             [In]     bool DisableAllPrivileges,
@@ -136,6 +138,7 @@ namespace WPinternals
              ADVAPI32,
              CharSet = CharSet.Auto,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         bool RevertToSelf();
 
@@ -144,6 +147,7 @@ namespace WPinternals
              EntryPoint = "LookupPrivilegeValueW",
              CharSet = CharSet.Auto,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         bool LookupPrivilegeValue(
             [In]     string lpSystemName,
@@ -154,6 +158,7 @@ namespace WPinternals
              KERNEL32,
              CharSet = CharSet.Auto,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         IntPtr GetCurrentProcess();
 
@@ -161,6 +166,7 @@ namespace WPinternals
              KERNEL32,
              CharSet = CharSet.Auto,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
             IntPtr GetCurrentThread();
 
@@ -168,6 +174,7 @@ namespace WPinternals
              ADVAPI32,
              CharSet = CharSet.Unicode,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         bool OpenProcessToken(
             [In]     IntPtr ProcessToken,
@@ -178,6 +185,7 @@ namespace WPinternals
              (ADVAPI32,
              CharSet = CharSet.Unicode,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         bool OpenThreadToken(
             [In]     IntPtr ThreadToken,
@@ -189,6 +197,7 @@ namespace WPinternals
             (ADVAPI32,
              CharSet = CharSet.Unicode,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         bool DuplicateTokenEx(
             [In]    SafeTokenHandle ExistingToken,
@@ -202,6 +211,7 @@ namespace WPinternals
              (ADVAPI32,
              CharSet = CharSet.Unicode,
              SetLastError = true)]
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         internal static extern
         bool SetThreadToken(
             [In]    IntPtr Thread,
@@ -212,12 +222,12 @@ namespace WPinternals
         internal const uint FILE_SHARE_DELETE = 0x00000004;
         internal const uint OPEN_EXISTING = 3;
 
-        internal const uint GENERIC_READ = 0x80000000;
-        internal const uint GENERIC_WRITE = 0x40000000;
+        internal const uint GENERIC_READ = (0x80000000);
+        internal const uint GENERIC_WRITE = (0x40000000);
 
         internal const uint FILE_FLAG_WRITE_THROUGH = 0x80000000;
         internal const uint FILE_FLAG_NO_BUFFERING = 0x20000000;
-        internal const uint FILE_READ_ATTRIBUTES = 0x0080;
+        internal const uint FILE_READ_ATTRIBUTES = (0x0080);
         internal const uint FILE_WRITE_ATTRIBUTES = 0x0100;
         internal const uint ERROR_INSUFFICIENT_BUFFER = 122;
         internal const uint FILE_BEGIN = 0;
@@ -257,8 +267,10 @@ namespace WPinternals
         public static extern bool DeviceIoControl(
             IntPtr hDevice,
             uint IoControlCode,
+            [MarshalAs(UnmanagedType.AsAny)]
             [In] object InBuffer,
             uint nInBufferSize,
+            [MarshalAs(UnmanagedType.AsAny)]
             [Out] object OutBuffer,
             uint nOutBufferSize,
             ref uint pBytesReturned,
@@ -291,7 +303,8 @@ namespace WPinternals
         }
 
         [DllImport(NativeMethods.KERNEL32, SetLastError = true),
-         SuppressUnmanagedCodeSecurity]
+         SuppressUnmanagedCodeSecurity,
+         ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
         private static extern bool CloseHandle(IntPtr handle);
 
         override protected bool ReleaseHandle()

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -31,8 +31,8 @@ namespace WPinternals
 
     internal class NokiaLabelViewModel : ContextViewModel
     {
-        private readonly NokiaPhoneModel CurrentModel;
-        private readonly Action<PhoneInterfaces> RequestModeSwitch;
+        private NokiaPhoneModel CurrentModel;
+        private Action<PhoneInterfaces> RequestModeSwitch;
 
         internal NokiaLabelViewModel(NokiaPhoneModel CurrentModel, Action<PhoneInterfaces> RequestModeSwitch)
             : base()
@@ -72,23 +72,20 @@ namespace WPinternals
             //byte[] Meid = CurrentModel.ExecuteJsonMethodAsBytes("ReadMeid", "Meid"); // error
             //string Test = CurrentModel.ExecuteJsonMethodAsString("ReadManufacturingData", ""); -> This method is only possible in Label-mode.
 
-            byte[] AsskMask = [1, 0, 16, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64];
+            byte[] AsskMask = new byte[0x10] { 1, 0, 16, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 64 };
             byte[] Challenge = new byte[0x88];
-            Dictionary<string, object> Params = new();
+            Dictionary<string, object> Params = new Dictionary<string, object>();
             Params.Add("AsskMask", AsskMask);
             Params.Add("Challenge", Challenge);
             Params.Add("AsicIndex", 0);
             byte[] TerminalResponseBytes = CurrentModel.ExecuteJsonMethodAsBytes("TerminalChallenge", Params, "TerminalResponse");
-            if (TerminalResponseBytes != null)
+            TerminalResponse TerminalResponse = Terminal.Parse(TerminalResponseBytes, 0);
+            if (TerminalResponse != null)
             {
-                TerminalResponse TerminalResponse = Terminal.Parse(TerminalResponseBytes, 0);
-                if (TerminalResponse != null)
-                {
-                    PublicID = TerminalResponse.PublicId;
-                    LogFile.Log("Public ID: " + Converter.ConvertHexToString(PublicID, " "));
-                    RootKeyHash = TerminalResponse.RootKeyHash;
-                    LogFile.Log("RootKeyHash: " + Converter.ConvertHexToString(RootKeyHash, " "));
-                }
+                PublicID = TerminalResponse.PublicId;
+                LogFile.Log("Public ID: " + Converter.ConvertHexToString(PublicID, " "));
+                RootKeyHash = TerminalResponse.RootKeyHash;
+                LogFile.Log("RootKeyHash: " + Converter.ConvertHexToString(RootKeyHash, " "));
             }
 
             ManufacturerModelName = CurrentModel.ExecuteJsonMethodAsString("ReadManufacturerModelName", "ManufacturerModelName"); // RM-821_eu_denmark_251
@@ -101,33 +98,20 @@ namespace WPinternals
             IMEI = CurrentModel.ExecuteJsonMethodAsString("ReadSerialNumber", "SerialNumber"); // IMEI
             LogFile.Log("IMEI: " + IMEI);
             BluetoothMac = CurrentModel.ExecuteJsonMethodAsBytes("ReadBtId", "BtId"); // 6 bytes: bc c6 ...
-
-            if (BluetoothMac != null)
-            {
-                LogFile.Log("Bluetooth MAC: " + Converter.ConvertHexToString(BluetoothMac, " "));
-            }
-
+            LogFile.Log("Bluetooth MAC: " + Converter.ConvertHexToString(BluetoothMac, " "));
             WlanMac = CurrentModel.ExecuteJsonMethodAsBytes("ReadWlanMacAddress", "WlanMacAddress1"); // 6 bytes
+            LogFile.Log("WLAN MAC: " + Converter.ConvertHexToString(WlanMac, " "));
 
-            if (WlanMac != null)
-            {
-                LogFile.Log("WLAN MAC: " + Converter.ConvertHexToString(WlanMac, " "));
-            }
-
-            IsBootloaderSecurityEnabled = CurrentModel.ExecuteJsonMethodAsBoolean("ReadProductionDoneState", "ProductionDone") ?? false;
+            IsBootloaderSecurityEnabled = (bool)CurrentModel.ExecuteJsonMethodAsBoolean("ReadProductionDoneState", "ProductionDone");
             LogFile.Log("Bootloader Security: " + ((bool)IsBootloaderSecurityEnabled ? "Enabled" : "Disabled"));
 
-            Params = new Dictionary<string, object>
-            {
-                { "ID", 3534 },
-                { "NVData", new byte[] { 0 } }
-            };
+            Params = new Dictionary<string, object>();
+            Params.Add("ID", 3534);
+            Params.Add("NVData", new byte[] { 0 });
             CurrentModel.ExecuteJsonMethod("WriteNVData", Params); // Error: 150
 
-            Params = new Dictionary<string, object>
-            {
-                { "ID", 3534 }
-            };
+            Params = new Dictionary<string, object>();
+            Params.Add("ID", 3534);
             byte[] NV3534 = CurrentModel.ExecuteJsonMethodAsBytes("ReadNVData", Params, "NVData"); // Error: value not written
         }
 
@@ -141,7 +125,7 @@ namespace WPinternals
             set
             {
                 _ProductCode = value;
-                OnPropertyChanged(nameof(ProductCode));
+                OnPropertyChanged("ProductCode");
             }
         }
 
@@ -155,7 +139,7 @@ namespace WPinternals
             set
             {
                 _ManufacturerModelName = value;
-                OnPropertyChanged(nameof(ManufacturerModelName));
+                OnPropertyChanged("ManufacturerModelName");
             }
         }
 
@@ -169,7 +153,7 @@ namespace WPinternals
             set
             {
                 _Operator = value;
-                OnPropertyChanged(nameof(Operator));
+                OnPropertyChanged("Operator");
             }
         }
 
@@ -183,7 +167,7 @@ namespace WPinternals
             set
             {
                 _Firmware = value;
-                OnPropertyChanged(nameof(Firmware));
+                OnPropertyChanged("Firmware");
             }
         }
 
@@ -197,7 +181,7 @@ namespace WPinternals
             set
             {
                 _IMEI = value;
-                OnPropertyChanged(nameof(IMEI));
+                OnPropertyChanged("IMEI");
             }
         }
 
@@ -211,7 +195,7 @@ namespace WPinternals
             set
             {
                 _PublicID = value;
-                OnPropertyChanged(nameof(PublicID));
+                OnPropertyChanged("PublicID");
             }
         }
 
@@ -225,7 +209,7 @@ namespace WPinternals
             set
             {
                 _RootKeyHash = value;
-                OnPropertyChanged(nameof(RootKeyHash));
+                OnPropertyChanged("RootKeyHash");
             }
         }
 
@@ -239,7 +223,7 @@ namespace WPinternals
             set
             {
                 _WlanMac = value;
-                OnPropertyChanged(nameof(WlanMac));
+                OnPropertyChanged("WlanMac");
             }
         }
 
@@ -253,7 +237,7 @@ namespace WPinternals
             set
             {
                 _BluetoothMac = value;
-                OnPropertyChanged(nameof(BluetoothMac));
+                OnPropertyChanged("BluetoothMac");
             }
         }
 
@@ -267,7 +251,7 @@ namespace WPinternals
             set
             {
                 _IsBootloaderSecurityEnabled = value;
-                OnPropertyChanged(nameof(IsBootloaderSecurityEnabled));
+                OnPropertyChanged("IsBootloaderSecurityEnabled");
             }
         }
 
@@ -281,7 +265,7 @@ namespace WPinternals
             set
             {
                 _IsSimLocked = value;
-                OnPropertyChanged(nameof(IsSimLocked));
+                OnPropertyChanged("IsSimLocked");
             }
         }
 
@@ -291,9 +275,6 @@ namespace WPinternals
             {
                 case "Flash":
                     RequestModeSwitch(PhoneInterfaces.Lumia_Flash);
-                    break;
-                case "PhoneInfo":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_PhoneInfo);
                     break;
                 case "Label":
                     RequestModeSwitch(PhoneInterfaces.Lumia_Label);

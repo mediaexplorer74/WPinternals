@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -20,7 +20,7 @@
 
 namespace WPinternals
 {
-    internal class AboutViewModel : ContextViewModel
+    internal class AboutViewModel: ContextViewModel
     {
         internal AboutViewModel() : base() { }
 
@@ -37,22 +37,6 @@ namespace WPinternals
             get
             {
                 return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.Minor;
-            }
-        }
-
-        public int BuildVersion
-        {
-            get
-            {
-                return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.Build;
-            }
-        }
-
-        public int RevisionVersion
-        {
-            get
-            {
-                return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.Revision;
             }
         }
     }

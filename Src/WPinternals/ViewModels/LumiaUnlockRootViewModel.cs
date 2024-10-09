@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -24,14 +24,14 @@ using System.Threading;
 
 namespace WPinternals
 {
-    internal class LumiaUnlockRootViewModel : ContextViewModel
+    internal class LumiaUnlockRootViewModel: ContextViewModel
     {
-        private readonly PhoneNotifierViewModel PhoneNotifier;
-        private readonly Action SwitchToUnlockBoot;
-        private readonly Action SwitchToDumpRom;
-        private readonly Action SwitchToFlashRom;
-        private readonly Action Callback;
-        private readonly bool DoUnlock;
+        private PhoneNotifierViewModel PhoneNotifier;
+        private Action SwitchToUnlockBoot;
+        private Action SwitchToDumpRom;
+        private Action SwitchToFlashRom;
+        private Action Callback;
+        private bool DoUnlock;
 
         internal LumiaUnlockRootViewModel(PhoneNotifierViewModel PhoneNotifier, Action SwitchToUnlockBoot, Action SwitchToDumpRom, Action SwitchToFlashRom, bool DoUnlock, Action Callback)
             : base()
@@ -50,23 +50,17 @@ namespace WPinternals
         internal override void EvaluateViewState()
         {
             if (!IsActive)
-            {
                 return;
-            }
 
             if (DoUnlock)
             {
                 if ((SubContextViewModel == null) || (SubContextViewModel is LumiaUndoRootTargetSelectionViewModel))
-                {
                     ActivateSubContext(new LumiaUnlockRootTargetSelectionViewModel(PhoneNotifier, SwitchToUnlockBoot, SwitchToDumpRom, SwitchToFlashRom, DoUnlockPhone, DoUnlockImage));
-                }
             }
             else
             {
                 if ((SubContextViewModel == null) || (SubContextViewModel is LumiaUnlockRootTargetSelectionViewModel))
-                {
                     ActivateSubContext(new LumiaUndoRootTargetSelectionViewModel(PhoneNotifier, SwitchToUnlockBoot, SwitchToDumpRom, SwitchToFlashRom, DoUnlockPhone, DoUnlockImage));
-                }
             }
         }
 
@@ -81,15 +75,11 @@ namespace WPinternals
                 bool HasNewBootloader = HasNewBootloaderFromMassStorage();
                 string EFIESPPath = HasNewBootloader ? null : ((MassStorage)PhoneNotifier.CurrentModel).Drive + @"\EFIESP\";
                 string MainOSPath = ((MassStorage)PhoneNotifier.CurrentModel).Drive + @"\";
-
-                bool HasV11Patches = HasV11PatchesFromMassStorage();
-
-                StartPatch(EFIESPPath, MainOSPath, HasNewBootloader, HasV11Patches);
+                StartPatch(EFIESPPath, MainOSPath, HasNewBootloader);
             }
             catch (Exception Ex)
             {
-                ActivateSubContext(new MessageViewModel(Ex.Message, () =>
-                {
+                ActivateSubContext(new MessageViewModel(Ex.Message, () => {
                     Callback();
                     ActivateSubContext(null);
                 }));
@@ -98,37 +88,29 @@ namespace WPinternals
 
         internal void DoUnlockImage(string EFIESPMountPoint, string MainOSMountPoint)
         {
-            StartPatch(EFIESPMountPoint, MainOSMountPoint, false, false); // Unlock image is only supported for Lumia's with bootloader Spec A. Due to complexity of Spec B bootloader hack, it cannot be applied on a mounted image.
+            StartPatch(EFIESPMountPoint, MainOSMountPoint, false); // Unlock image is only supported for Lumia's with bootloader Spec A. Due to complexity of Spec B bootloader hack, it cannot be applied on a mounted image.
         }
 
         // Magic!
         // Apply patches for Root Access
-        private void StartPatch(string EFIESP, string MainOS, bool HasNewBootloader, bool HasV11Patches)
+        private void StartPatch(string EFIESP, string MainOS, bool HasNewBootloader)
         {
             IsSwitchingInterface = false;
             new Thread(() =>
                 {
                     if (DoUnlock)
-                    {
                         LogFile.BeginAction("EnableRootAccess");
-                    }
                     else
-                    {
                         LogFile.BeginAction("DisableRootAccess");
-                    }
 
                     bool Result = false;
 
-                    if (EFIESP != null && !HasV11Patches)
+                    if (EFIESP != null)
                     {
                         if (DoUnlock)
-                        {
                             ActivateSubContext(new BusyViewModel("Enable Root Access on EFIESP..."));
-                        }
                         else
-                        {
                             ActivateSubContext(new BusyViewModel("Disable Root Access on EFIESP..."));
-                        }
 
                         try
                         {
@@ -171,13 +153,9 @@ namespace WPinternals
                     if (MainOS != null)
                     {
                         if (DoUnlock)
-                        {
                             ActivateSubContext(new BusyViewModel("Enable Root Access on MainOS..."));
-                        }
                         else
-                        {
                             ActivateSubContext(new BusyViewModel("Disable Root Access on MainOS..."));
-                        }
 
                         try
                         {
@@ -187,9 +165,7 @@ namespace WPinternals
                                 Result = App.PatchEngine.Patch("RootAccess-MainOS");
 
                                 if (Result)
-                                {
                                     Result = App.PatchEngine.Patch("SecureBootHack-MainOS");
-                                }
 
                                 if (!Result)
                                 {
@@ -202,9 +178,7 @@ namespace WPinternals
                                 App.PatchEngine.Restore("RootAccess-MainOS");
 
                                 if (!HasNewBootloader)
-                                {
                                     App.PatchEngine.Restore("SecureBootHack-MainOS");
-                                }
 
                                 Result = true;
                             }
@@ -228,24 +202,16 @@ namespace WPinternals
                         else
                         {
                             if (DoUnlock)
-                            {
                                 ActivateSubContext(new MessageViewModel("Root Access successfully enabled!", Exit));
-                            }
                             else
-                            {
                                 ActivateSubContext(new MessageViewModel("Root Access successfully disabled!", Exit));
-                            }
                         }
                     }
 
                     if (DoUnlock)
-                    {
                         LogFile.EndAction("EnableRootAccess");
-                    }
                     else
-                    {
                         LogFile.EndAction("DisableRootAccess");
-                    }
                 }).Start();
         }
 
@@ -262,27 +228,14 @@ namespace WPinternals
             MassStorage Phone = (MassStorage)PhoneNotifier.CurrentModel;
             Phone.OpenVolume(false);
             byte[] GPTBuffer = Phone.ReadSectors(1, 33);
-            GPT GPT = new(GPTBuffer);
+            GPT GPT = new WPinternals.GPT(GPTBuffer);
             Partition Partition = GPT.GetPartition("UEFI");
             byte[] UefiBuffer = Phone.ReadSectors(Partition.FirstSector, Partition.LastSector - Partition.FirstSector + 1);
-            UEFI UEFI = new(UefiBuffer);
-            string BootMgrName = UEFI.EFIs.First(efi => (efi.Name != null) && (efi.Name.Contains("BootMgrApp") || efi.Name.Contains("FlashApp"))).Name;
+            UEFI UEFI = new UEFI(UefiBuffer);
+            string BootMgrName = UEFI.EFIs.Where(efi => ((efi.Name != null) && ((efi.Name.Contains("BootMgrApp")) || (efi.Name.Contains("FlashApp"))))).First().Name;
             byte[] BootMgr = UEFI.GetFile(BootMgrName);
             // "Header V2"
-            Result = ByteOperations.FindAscii(BootMgr, "Header V2") != null;
-            Phone.CloseVolume();
-            return Result;
-        }
-
-        private bool HasV11PatchesFromMassStorage()
-        {
-            bool Result = false;
-            MassStorage Phone = (MassStorage)PhoneNotifier.CurrentModel;
-            Phone.OpenVolume(false);
-            byte[] GPTBuffer = Phone.ReadSectors(1, 33);
-            GPT GPT = new(GPTBuffer);
-            Partition Partition = GPT.GetPartition("BACKUP_BS_NV");
-            Result = Partition != null;
+            Result = (ByteOperations.FindAscii(BootMgr, "Header V2") != null);
             Phone.CloseVolume();
             return Result;
         }

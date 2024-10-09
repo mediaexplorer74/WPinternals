@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -19,10 +19,10 @@
 // DEALINGS IN THE SOFTWARE.
 
 using System;
-using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Windows;
+using System.IO;
+using System.Threading;
 
 namespace WPinternals
 {
@@ -35,7 +35,7 @@ namespace WPinternals
         internal static Action NavigateToUnlockBoot;
         internal static PatchEngine PatchEngine;
         internal static WPinternalsConfig Config;
-        internal static Mutex mutex = new(false, "Global\\WPinternalsRunning");
+        internal static Mutex mutex = new Mutex(false, "Global\\WPinternalsRunning");
         internal static DownloadsViewModel DownloadManager;
         internal static bool InterruptBoot = false;
         internal static bool IsPnPEventLogMissing = true;
@@ -45,33 +45,20 @@ namespace WPinternals
         {
             AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
 
-#if NETCORE
-            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-#endif
-
-            if (Environment.GetCommandLineArgs().Length > 1)
-            {
+            if (Environment.GetCommandLineArgs().Count() > 1)
                 CommandLine.OpenConsole();
-            }
 
-            try
+            if (!mutex.WaitOne(0, false))
             {
-                if (!mutex.WaitOne(0, false))
+                if (Environment.GetCommandLineArgs().Count() > 1)
                 {
-                    if (Environment.GetCommandLineArgs().Length > 1)
-                    {
-                        Console.WriteLine("Windows Phone Internals is already running");
-                        CommandLine.CloseConsole();
-                    }
-                    else
-                    {
-                        MessageBox.Show("Windows Phone Internals is already running.", "Windows Phone Internals", MessageBoxButton.OK, MessageBoxImage.Exclamation);
-                    }
-
-                    Environment.Exit(0);
+                    Console.WriteLine("Windows Phone Internals is already running");
+                    CommandLine.CloseConsole();
                 }
+                else
+                    MessageBox.Show("Windows Phone Internals is already running.", "Windows Phone Internals", MessageBoxButton.OK, MessageBoxImage.Exclamation);
+                Environment.Exit(0);
             }
-            catch (AbandonedMutexException) { }
 
             Registration.CheckExpiration();
 
@@ -83,16 +70,20 @@ namespace WPinternals
             }
             else
             {
-                using Stream stream = System.Reflection.Assembly.GetEntryAssembly().GetManifestResourceStream("WPinternals.PatchDefinitions.xml");
-                using StreamReader sr = new(stream);
-                PatchDefintionsXml = sr.ReadToEnd();
+                using (Stream stream = System.Reflection.Assembly.GetEntryAssembly().GetManifestResourceStream("WPinternals.PatchDefinitions.xml"))
+                {
+                    using (StreamReader sr = new StreamReader(stream))
+                    {
+                        PatchDefintionsXml = sr.ReadToEnd();
+                    }
+                }
             }
             PatchEngine = new PatchEngine(PatchDefintionsXml);
 
             Config = WPinternalsConfig.ReadConfig();
         }
 
-        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception)
             {

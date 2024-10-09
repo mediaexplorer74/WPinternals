@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -28,10 +28,10 @@ namespace WPinternals
 
     internal class DisclaimerViewModel : ContextViewModel
     {
-        private readonly Action Accepted;
+        Action Accepted;
 
         internal DisclaimerViewModel(Action Accepted)
-            : base()
+            : base() 
         {
             this.Accepted = Accepted;
         }
@@ -41,7 +41,14 @@ namespace WPinternals
         {
             get
             {
-                return _ExitCommand ??= new DelegateCommand(() => Application.Current.Shutdown());
+                if (_ExitCommand == null)
+                {
+                    _ExitCommand = new DelegateCommand(() =>
+                    {
+                        Application.Current.Shutdown();
+                    });
+                }
+                return _ExitCommand;
             }
         }
 
@@ -50,11 +57,15 @@ namespace WPinternals
         {
             get
             {
-                return _ContinueCommand ??= new DelegateCommand(() =>
+                if (_ContinueCommand == null)
+                {
+                    _ContinueCommand = new DelegateCommand(() =>
                     {
                         Registry.CurrentUser.OpenSubKey("Software\\WPInternals", true).SetValue("DisclaimerAccepted", 1, RegistryValueKind.DWord);
                         Accepted();
                     });
+                }
+                return _ContinueCommand;
             }
         }
     }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -18,18 +18,28 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
+using System.Threading;
+
 namespace WPinternals
 {
-    internal class NokiaMassStorageViewModel : ContextViewModel
+    internal class NokiaMassStorageViewModel: ContextViewModel
     {
-        private readonly MassStorage CurrentModel;
+        private MassStorage CurrentModel;
 
         internal NokiaMassStorageViewModel(MassStorage CurrentModel)
             : base()
         {
             this.CurrentModel = CurrentModel;
-            Drive = CurrentModel.Drive;
+            _Drive = CurrentModel.Drive;
         }
-        public string Drive { get; } = null;
+
+        private string _Drive = null;
+        public string Drive
+        {
+            get
+            {
+                return _Drive;
+            }
+        }
     }
 }

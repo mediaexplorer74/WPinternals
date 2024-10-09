@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -23,26 +23,26 @@ using System.Threading;
 
 namespace WPinternals
 {
-    internal class LumiaUnlockRootTargetSelectionViewModel : LumiaRootAccessTargetSelectionViewModel
+    internal class LumiaUnlockRootTargetSelectionViewModel: LumiaRootAccessTargetSelectionViewModel
     {
         public LumiaUnlockRootTargetSelectionViewModel(PhoneNotifierViewModel PhoneNotifier, Action SwitchToUnlockBoot, Action SwitchToDumpRom, Action SwitchToFlashRom, Action UnlockPhoneCallback, Action<string, string> UnlockImageCallback)
             : base(PhoneNotifier, SwitchToUnlockBoot, SwitchToDumpRom, SwitchToFlashRom, UnlockPhoneCallback, UnlockImageCallback) { }
     }
 
-    internal class LumiaUndoRootTargetSelectionViewModel : LumiaRootAccessTargetSelectionViewModel
+    internal class LumiaUndoRootTargetSelectionViewModel: LumiaRootAccessTargetSelectionViewModel
     {
         public LumiaUndoRootTargetSelectionViewModel(PhoneNotifierViewModel PhoneNotifier, Action SwitchToUnlockBoot, Action SwitchToDumpRom, Action SwitchToFlashRom, Action UnlockPhoneCallback, Action<string, string> UnlockImageCallback)
             : base(PhoneNotifier, SwitchToUnlockBoot, SwitchToDumpRom, SwitchToFlashRom, UnlockPhoneCallback, UnlockImageCallback) { }
     }
 
-    internal class LumiaRootAccessTargetSelectionViewModel : ContextViewModel
+    internal class LumiaRootAccessTargetSelectionViewModel: ContextViewModel
     {
-        private readonly PhoneNotifierViewModel PhoneNotifier;
+        private PhoneNotifierViewModel PhoneNotifier;
         internal Action SwitchToUnlockBoot;
         internal Action SwitchToDumpRom;
         internal Action SwitchToFlashRom;
-        private readonly Action UnlockPhoneCallback;
-        private readonly Action<string, string> UnlockImageCallback;
+        private Action UnlockPhoneCallback;
+        private Action<string, string> UnlockImageCallback;
 
         internal LumiaRootAccessTargetSelectionViewModel(PhoneNotifierViewModel PhoneNotifier, Action SwitchToUnlockBoot, Action SwitchToDumpRom, Action SwitchToFlashRom, Action UnlockPhoneCallback, Action<string, string> UnlockImageCallback)
             : base()
@@ -72,7 +72,7 @@ namespace WPinternals
                 if (value != _EFIESPMountPoint)
                 {
                     _EFIESPMountPoint = value;
-                    OnPropertyChanged(nameof(EFIESPMountPoint));
+                    OnPropertyChanged("EFIESPMountPoint");
                 }
             }
         }
@@ -89,7 +89,7 @@ namespace WPinternals
                 if (value != _MainOSMountPoint)
                 {
                     _MainOSMountPoint = value;
-                    OnPropertyChanged(nameof(MainOSMountPoint));
+                    OnPropertyChanged("MainOSMountPoint");
                 }
             }
         }
@@ -106,7 +106,7 @@ namespace WPinternals
                 if (value != _IsPhoneDisconnected)
                 {
                     _IsPhoneDisconnected = value;
-                    OnPropertyChanged(nameof(IsPhoneDisconnected));
+                    OnPropertyChanged("IsPhoneDisconnected");
                 }
             }
         }
@@ -123,7 +123,7 @@ namespace WPinternals
                 if (value != _IsPhoneInMassStorage)
                 {
                     _IsPhoneInMassStorage = value;
-                    OnPropertyChanged(nameof(IsPhoneInMassStorage));
+                    OnPropertyChanged("IsPhoneInMassStorage");
                 }
             }
         }
@@ -140,7 +140,7 @@ namespace WPinternals
                 if (value != _IsPhoneInOtherMode)
                 {
                     _IsPhoneInOtherMode = value;
-                    OnPropertyChanged(nameof(IsPhoneInOtherMode));
+                    OnPropertyChanged("IsPhoneInOtherMode");
                 }
             }
         }
@@ -150,7 +150,11 @@ namespace WPinternals
         {
             get
             {
-                return _UnlockPhoneCommand ??= new DelegateCommand(() => UnlockPhoneCallback(), () => !IsPhoneDisconnected);
+                if (_UnlockPhoneCommand == null)
+                {
+                    _UnlockPhoneCommand = new DelegateCommand(() => { UnlockPhoneCallback(); }, () => !IsPhoneDisconnected);
+                }
+                return _UnlockPhoneCommand;
             }
         }
 
@@ -159,7 +163,11 @@ namespace WPinternals
         {
             get
             {
-                return _UnlockImageCommand ??= new DelegateCommand(() => UnlockImageCallback(EFIESPMountPoint, MainOSMountPoint), () => (EFIESPMountPoint != null) || (MainOSMountPoint != null));
+                if (_UnlockImageCommand == null)
+                {
+                    _UnlockImageCommand = new DelegateCommand(() => { UnlockImageCallback(EFIESPMountPoint, MainOSMountPoint); }, () => ((EFIESPMountPoint != null) || (MainOSMountPoint != null)));
+                }
+                return _UnlockImageCommand;
             }
         }
 
@@ -168,12 +176,12 @@ namespace WPinternals
             PhoneNotifier.NewDeviceArrived -= NewDeviceArrived;
         }
 
-        private void NewDeviceArrived(ArrivalEventArgs Args)
+        void NewDeviceArrived(ArrivalEventArgs Args)
         {
             new Thread(() => EvaluateViewState()).Start();
         }
 
-        private void DeviceRemoved()
+        void DeviceRemoved()
         {
             new Thread(() => EvaluateViewState()).Start();
         }
@@ -182,7 +190,7 @@ namespace WPinternals
         {
             IsPhoneDisconnected = PhoneNotifier.CurrentInterface == null;
             IsPhoneInMassStorage = PhoneNotifier.CurrentInterface == PhoneInterfaces.Lumia_MassStorage;
-            IsPhoneInOtherMode = !IsPhoneDisconnected && !IsPhoneInMassStorage;
+            IsPhoneInOtherMode = (!IsPhoneDisconnected && !IsPhoneInMassStorage);
             UnlockPhoneCommand.RaiseCanExecuteChanged();
             UnlockImageCommand.RaiseCanExecuteChanged();
         }

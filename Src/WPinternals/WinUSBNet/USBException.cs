@@ -6,6 +6,8 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace MadWizard.WinUSBNet
 {
@@ -32,10 +34,6 @@ namespace MadWizard.WinUSBNet
         /// <param name="innerException">The underlying exception causing the USBException</param>
         public USBException(string message, Exception innerException)
             : base(message, innerException)
-        {
-        }
-
-        public USBException() : base()
         {
         }
     }

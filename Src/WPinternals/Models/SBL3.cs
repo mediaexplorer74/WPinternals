@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -35,35 +35,33 @@ namespace WPinternals
         internal SBL3(string FileName)
         {
             Binary = null;
-
+            
             // First try to parse as FFU
             try
             {
                 if (FFU.IsFFU(FileName))
                 {
-                    FFU FFUFile = new(FileName);
+                    FFU FFUFile = new FFU(FileName);
                     Binary = FFUFile.GetPartition("SBL3");
                 }
             }
-            catch (Exception ex)
-            {
-                LogFile.LogException(ex, LogType.FileOnly);
-            }
+            catch { }
 
             // If not succeeded, then try to parse it as raw image
             if (Binary == null)
             {
-                byte[] SBL3Pattern = [0x18, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x8F, 0xFF, 0xFF, 0xFF, 0xFF];
-                byte[] SBL3Mask = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF];
+                byte[] SBL3Header;
+                byte[] SBL3Pattern = new byte[] { 0x18, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x8F, 0xFF, 0xFF, 0xFF, 0xFF };
+                byte[] SBL3Mask    = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF };
 
-                UInt32? Offset = ByteOperations.FindPatternInFile(FileName, SBL3Pattern, SBL3Mask, out byte[] SBL3Header);
+                UInt32? Offset = ByteOperations.FindPatternInFile(FileName, SBL3Pattern, SBL3Mask, out SBL3Header);
 
                 if (Offset != null)
                 {
                     UInt32 Length = ByteOperations.ReadUInt32(SBL3Header, 0x10) + 0x28; // SBL3 Image Size + Header Size
                     Binary = new byte[Length];
 
-                    FileStream Stream = new(FileName, FileMode.Open, FileAccess.Read);
+                    FileStream Stream = new FileStream(FileName, FileMode.Open, FileAccess.Read);
                     Stream.Seek((long)Offset, SeekOrigin.Begin);
                     Stream.Read(Binary, 0, (int)Length);
                     Stream.Close();
@@ -75,13 +73,11 @@ namespace WPinternals
         internal byte[] Patch()
         {
             UInt32? PatchOffset = ByteOperations.FindPattern(Binary,
-                [0x04, 0x00, 0x9F, 0xE5, 0x28, 0x00, 0xD0, 0xE5, 0x1E, 0xFF, 0x2F, 0xE1],
+                new byte[] { 0x04, 0x00, 0x9F, 0xE5, 0x28, 0x00, 0xD0, 0xE5, 0x1E, 0xFF, 0x2F, 0xE1 },
                 null, null);
 
             if (PatchOffset == null)
-            {
                 throw new BadImageFormatException();
-            }
 
             Buffer.BlockCopy(new byte[] { 0x00, 0x00, 0xA0, 0xE3 }, 0, Binary, (int)PatchOffset + 4, 4);
 

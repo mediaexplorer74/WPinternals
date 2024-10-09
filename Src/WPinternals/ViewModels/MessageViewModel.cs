@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -22,7 +22,7 @@ using System;
 
 namespace WPinternals
 {
-    internal class MessageViewModel : ContextViewModel
+    internal class MessageViewModel: ContextViewModel
     {
         internal MessageViewModel(string Message, Action OkAction = null, Action CancelAction = null)
             : base()
@@ -30,15 +30,9 @@ namespace WPinternals
             LogFile.Log(Message);
 
             if (OkAction != null)
-            {
                 this.OkCommand = new DelegateCommand(OkAction);
-            }
-
             if (CancelAction != null)
-            {
                 this.CancelCommand = new DelegateCommand(CancelAction);
-            }
-
             this.Message = Message;
         }
 
@@ -52,7 +46,7 @@ namespace WPinternals
             set
             {
                 _Message = value;
-                OnPropertyChanged(nameof(Message));
+                OnPropertyChanged("Message");
             }
         }
 
@@ -66,10 +60,34 @@ namespace WPinternals
             set
             {
                 _SubMessage = value;
-                OnPropertyChanged(nameof(SubMessage));
+                OnPropertyChanged("SubMessage");
             }
         }
-        public DelegateCommand OkCommand { get; } = null;
-        public DelegateCommand CancelCommand { get; } = null;
+
+        private DelegateCommand _OkCommand = null;
+        public DelegateCommand OkCommand
+        {
+            get
+            {
+                return _OkCommand;
+            }
+            private set
+            {
+                _OkCommand = value;
+            }
+        }
+
+        private DelegateCommand _CancelCommand = null;
+        public DelegateCommand CancelCommand
+        {
+            get
+            {
+                return _CancelCommand;
+            }
+            private set
+            {
+                _CancelCommand = value;
+            }
+        }
     }
 }

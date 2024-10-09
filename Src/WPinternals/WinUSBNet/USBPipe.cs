@@ -1,11 +1,13 @@
-/*  WinUSBNet library
+﻿/*  WinUSBNet library
  *  (C) 2010 Thomas Bleeker (www.madwizard.org)
- *
+ *  
  *  Licensed under the MIT license, see license.txt or:
  *  http://www.opensource.org/licenses/mit-license.php
  */
 
 using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace MadWizard.WinUSBNet
 {
@@ -17,6 +19,7 @@ namespace MadWizard.WinUSBNet
     {
         private API.WINUSB_PIPE_INFORMATION _pipeInfo;
         private USBInterface _interface = null;
+        private USBDevice _device;
         private USBPipePolicy _policy;
 
         private byte[] LastWritten = null;
@@ -24,19 +27,25 @@ namespace MadWizard.WinUSBNet
         /// <summary>
         /// Endpoint address including the direction in the most significant bit
         /// </summary>
-        public byte Address
+        public byte Address 
         {
             get
             {
                 return _pipeInfo.PipeId;
             }
         }
-
+        
         /// <summary>
         /// The USBDevice this pipe is associated with
         /// </summary>
-        public USBDevice Device { get; }
-
+        public USBDevice Device
+        {
+            get
+            {
+                return _device;
+            }
+        }
+        
         /// <summary>
         /// Maximum packet size for transfers on this endpoint
         /// </summary>
@@ -115,8 +124,10 @@ namespace MadWizard.WinUSBNet
 
             try
             {
-                Device.InternalDevice.ReadPipe(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length, out uint bytesRead);
-
+                uint bytesRead;
+                
+                _device.InternalDevice.ReadPipe(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length, out bytesRead);
+                
                 return (int)bytesRead;
             }
             catch (API.APIException e)
@@ -130,44 +141,30 @@ namespace MadWizard.WinUSBNet
         private void CheckReadParams(byte[] buffer, int offset, int length)
         {
             if (!IsIn)
-            {
-                // throw new ArgumentOutOfRangeException("Offset of data to read is outside the buffer boundaries.");
-                LogAndThrowException(new ArgumentOutOfRangeException("Offset of data to read is outside the buffer boundaries."));
-            }
+                // throw new NotSupportedException("Cannot read from a pipe with OUT direction.");
+                LogAndThrowException(new NotSupportedException("Cannot read from a pipe with OUT direction."));
 
             int bufferLength = buffer.Length;
             if (offset < 0 || offset >= bufferLength)
-            {
-                // throw new ArgumentOutOfRangeException(nameof(offset), "Offset of data to read is outside the buffer boundaries.");
+                // throw new ArgumentOutOfRangeException("Offset of data to read is outside the buffer boundaries.");
                 LogAndThrowException(new ArgumentOutOfRangeException("Offset of data to read is outside the buffer boundaries."));
-            }
-
             if (length < 0 || (offset + length) > bufferLength)
-            {
-                // throw new ArgumentOutOfRangeException(nameof(length), "Length of data to read is outside the buffer boundaries.");
+                // throw new ArgumentOutOfRangeException("Length of data to read is outside the buffer boundaries.");
                 LogAndThrowException(new ArgumentOutOfRangeException("Length of data to read is outside the buffer boundaries."));
-            }
         }
         private void CheckWriteParams(byte[] buffer, int offset, int length)
         {
             if (!IsOut)
-            {
-                //throw new NotSupportedException("Cannot write to a pipe with IN direction.");
+                // throw new NotSupportedException("Cannot write to a pipe with IN direction.");
                 LogAndThrowException(new NotSupportedException("Cannot write to a pipe with IN direction."));
-            }
 
             int bufferLength = buffer.Length;
             if (offset < 0 || offset >= bufferLength)
-            {
-                // throw new ArgumentOutOfRangeException(nameof(offset), "Offset of data to write is outside the buffer boundaries.");
+                // throw new ArgumentOutOfRangeException("Offset of data to write is outside the buffer boundaries.");
                 LogAndThrowException(new ArgumentOutOfRangeException("Offset of data to write is outside the buffer boundaries."));
-            }
-
             if (length < 0 || (offset + length) > bufferLength)
-            {
-                // throw new ArgumentOutOfRangeException(nameof(length), "Length of data to write is outside the buffer boundaries.");
+                // throw new ArgumentOutOfRangeException("Length of data to write is outside the buffer boundaries.");
                 LogAndThrowException(new ArgumentOutOfRangeException("Length of data to write is outside the buffer boundaries."));
-            }
         }
 
         /// <summary>Initiates an asynchronous read operation on the pipe. </summary>
@@ -176,31 +173,33 @@ namespace MadWizard.WinUSBNet
         /// <param name="length">Length of the data to transfer.</param>
         /// <param name="userCallback">An optional asynchronous callback, to be called when the operation is complete. Can be null if no callback is required.</param>
         /// <param name="stateObject">A user-provided object that distinguishes this particular asynchronous operation. Can be null if not required.</param>
-        /// <returns>An <see cref="IAsyncResult"/> object representing the asynchronous operation, which could still be pending.</returns>
+        /// <returns>An <see cref="IAsyncResult"/> object repesenting the asynchronous operation, which could still be pending.</returns>
         /// <remarks>This method always completes immediately even if the operation is still pending. The <see cref="IAsyncResult"/> object returned represents the operation
         /// and must be passed to <see cref="EndRead"/> to retrieve the result of the operation. For every call to this method a matching call to
         /// <see cref="EndRead"/> must be made. When <paramref name="userCallback"/> specifies a callback function, this function will be called when the operation is completed. The optional
-        /// <paramref name="stateObject"/> parameter can be used to pass user-defined information to this callback or the <see cref="IAsyncResult"/>. The <see cref="IAsyncResult"/>
+        /// <paramref name="stateObject"/> parameter can be used to pass user-defined information to this callback or the <see cref="IAsyncResult"/>. The <see cref="IAsyncResult"/> 
         /// also provides an event handle (<see cref="IAsyncResult.AsyncWaitHandle" />) that will be triggered when the operation is complete as well.
         /// </remarks>
         public IAsyncResult BeginRead(byte[] buffer, int offset, int length, AsyncCallback userCallback, object stateObject)
         {
             CheckReadParams(buffer, offset, length);
 
-            USBAsyncResult result = new(userCallback, stateObject);
+            USBAsyncResult result = new USBAsyncResult(userCallback, stateObject);
             try
             {
-                Device.InternalDevice.ReadPipeOverlapped(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length, result);
+                _device.InternalDevice.ReadPipeOverlapped(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length, result);
             }
             catch (API.APIException e)
             {
-                result.Dispose();
-                //throw new USBException("Failed to read from pipe.", e);
+                if (result != null)
+                    result.Dispose();
+                // throw new USBException("Failed to read from pipe.", e);
                 LogAndThrowException(new USBException("Failed to read from pipe.", e));
             }
             catch (Exception e)
             {
-                result?.Dispose();
+                if (result != null)
+                    result.Dispose();
                 // throw;
                 LogException(e);
                 throw;
@@ -211,42 +210,33 @@ namespace MadWizard.WinUSBNet
         /// <summary>
         /// Waits for a pending asynchronous read operation to complete.
         /// </summary>
-        /// <param name="asyncResult">The <see cref="IAsyncResult"/> object representing the asynchronous operation,
+        /// <param name="asyncResult">The <see cref="IAsyncResult"/> object representing the asynchonous operation,
         /// as returned by <see cref="BeginRead"/>.</param>
         /// <returns>The number of bytes transfered during the operation.</returns>
         /// <remarks>Every call to <see cref="BeginRead"/> must have a matching call to <see cref="EndRead"/> to dispose
-        /// of any resources used and to retrieve the result of the operation. When the operation was successful the method returns the number
-        /// of bytes that were transfered. If an error occurred during the operation this method will throw the exceptions that would
-        /// otherwise have occurred during the operation. If the operation is not yet finished EndWrite will wait for the
+        /// of any resources used and to retrieve the result of the operation. When the operation was successful the method returns the number 
+        /// of bytes that were transfered. If an error occurred during the operation this method will throw the exceptions that would 
+        /// otherwise have ocurred during the operation. If the operation is not yet finished EndWrite will wait for the 
         /// operation to finish before returning.</remarks>
         public int EndRead(IAsyncResult asyncResult)
         {
             if (asyncResult == null)
-            {
                 // throw new NullReferenceException("asyncResult cannot be null");
                 LogAndThrowException(new NullReferenceException("asyncResult cannot be null"));
-            }
-
             if (!(asyncResult is USBAsyncResult))
-            {
                 // throw new ArgumentException("AsyncResult object was not created by calling BeginRead on this class.");
                 LogAndThrowException(new ArgumentException("AsyncResult object was not created by calling BeginRead on this class."));
-            }
 
             // todo: check duplicate end reads?
             USBAsyncResult result = (USBAsyncResult)asyncResult;
             try
             {
                 if (!result.IsCompleted)
-                {
                     result.AsyncWaitHandle.WaitOne();
-                }
 
                 if (result.Error != null)
-                {
                     // throw new USBException("Asynchronous read from pipe has failed.", result.Error);
                     LogAndThrowException(new USBException("Asynchronous read from pipe has failed.", result.Error));
-                }
 
                 return result.BytesTransfered;
             }
@@ -254,6 +244,7 @@ namespace MadWizard.WinUSBNet
             {
                 result.Dispose();
             }
+
         }
 
         /// <summary>
@@ -264,7 +255,7 @@ namespace MadWizard.WinUSBNet
         {
             Write(buffer, 0, buffer.Length);
         }
-
+        
         /// <summary>
         /// Writes data from a buffer to the pipe.
         /// </summary>
@@ -279,12 +270,12 @@ namespace MadWizard.WinUSBNet
 
             try
             {
-                Device.InternalDevice.WritePipe(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length);
+                _device.InternalDevice.WritePipe(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length);
             }
             catch (API.APIException e)
             {
-                byte[] SubBuffer = new byte[length < 16 ? length : 16];
-                Array.Copy(buffer, offset, SubBuffer, 0, length < 16 ? length : 16);
+                byte[] SubBuffer = new byte[(length < 16 ? length : 16)];
+                Array.Copy(buffer, offset, SubBuffer, 0, (length < 16 ? length : 16));
                 // throw new USBException("Failed to write to pipe: " + WPinternals.Converter.ConvertHexToString(SubBuffer, ""), e);
                 LogAndThrowException(new USBException("Failed to write to pipe: " + WPinternals.Converter.ConvertHexToString(SubBuffer, ""), e));
             }
@@ -296,11 +287,11 @@ namespace MadWizard.WinUSBNet
         /// <param name="length">Length of the data to transfer.</param>
         /// <param name="userCallback">An optional asynchronous callback, to be called when the operation is complete. Can be null if no callback is required.</param>
         /// <param name="stateObject">A user-provided object that distinguishes this particular asynchronous operation. Can be null if not required.</param>
-        /// <returns>An <see cref="IAsyncResult"/> object representing the asynchronous operation, which could still be pending.</returns>
+        /// <returns>An <see cref="IAsyncResult"/> object repesenting the asynchronous operation, which could still be pending.</returns>
         /// <remarks>This method always completes immediately even if the operation is still pending. The <see cref="IAsyncResult"/> object returned represents the operation
         /// and must be passed to <see cref="EndWrite"/> to retrieve the result of the operation. For every call to this method a matching call to
         /// <see cref="EndWrite"/> must be made. When <paramref name="userCallback"/> specifies a callback function, this function will be called when the operation is completed. The optional
-        /// <paramref name="stateObject"/> parameter can be used to pass user-defined information to this callback or the <see cref="IAsyncResult"/>. The <see cref="IAsyncResult"/>
+        /// <paramref name="stateObject"/> parameter can be used to pass user-defined information to this callback or the <see cref="IAsyncResult"/>. The <see cref="IAsyncResult"/> 
         /// also provides an event handle (<see cref="IAsyncResult.AsyncWaitHandle" />) that will be triggered when the operation is complete as well.
         /// </remarks>
         public IAsyncResult BeginWrite(byte[] buffer, int offset, int length, AsyncCallback userCallback, object stateObject)
@@ -309,23 +300,25 @@ namespace MadWizard.WinUSBNet
 
             LogLastWrite(buffer, offset, length);
 
-            USBAsyncResult result = new(userCallback, stateObject);
+            USBAsyncResult result = new USBAsyncResult(userCallback, stateObject);
             try
             {
-                Device.InternalDevice.WriteOverlapped(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length, result);
+                _device.InternalDevice.WriteOverlapped(Interface.InterfaceIndex, _pipeInfo.PipeId, buffer, offset, length, result);
             }
             catch (API.APIException e)
             {
-                result?.Dispose();
+                if (result != null)
+                    result.Dispose();
 
-                byte[] SubBuffer = new byte[length < 16 ? length : 16];
-                Array.Copy(buffer, offset, SubBuffer, 0, length < 16 ? length : 16);
+                byte[] SubBuffer = new byte[(length < 16 ? length : 16)];
+                Array.Copy(buffer, offset, SubBuffer, 0, (length < 16 ? length : 16));
                 // throw new USBException("Failed to write to pipe: " + WPinternals.Converter.ConvertHexToString(SubBuffer, ""), e);
                 LogAndThrowException(new USBException("Failed to write to pipe: " + WPinternals.Converter.ConvertHexToString(SubBuffer, ""), e));
             }
             catch (Exception e)
             {
-                result?.Dispose();
+                if (result != null)
+                    result.Dispose();
                 // throw;
                 LogException(e);
                 throw;
@@ -336,27 +329,22 @@ namespace MadWizard.WinUSBNet
         /// <summary>
         /// Waits for a pending asynchronous write operation to complete.
         /// </summary>
-        /// <param name="asyncResult">The <see cref="IAsyncResult"/> object representing the asynchronous operation,
+        /// <param name="asyncResult">The <see cref="IAsyncResult"/> object representing the asynchonous operation,
         /// as returned by <see cref="BeginWrite"/>.</param>
         /// <returns>The number of bytes transfered during the operation.</returns>
         /// <remarks>Every call to <see cref="BeginWrite"/> must have a matching call to <see cref="EndWrite"/> to dispose
-        /// of any resources used and to retrieve the result of the operation. When the operation was successful the method returns the number
-        /// of bytes that were transfered. If an error occurred during the operation this method will throw the exceptions that would
-        /// otherwise have occurred during the operation. If the operation is not yet finished EndWrite will wait for the
+        /// of any resources used and to retrieve the result of the operation. When the operation was successful the method returns the number 
+        /// of bytes that were transfered. If an error occurred during the operation this method will throw the exceptions that would 
+        /// otherwise have ocurred during the operation. If the operation is not yet finished EndWrite will wait for the 
         /// operation to finish before returning.</remarks>
         public void EndWrite(IAsyncResult asyncResult)
         {
             if (asyncResult == null)
-            {
                 // throw new NullReferenceException("asyncResult cannot be null");
                 LogAndThrowException(new NullReferenceException("asyncResult cannot be null"));
-            }
-
             if (!(asyncResult is USBAsyncResult))
-            {
                 // throw new ArgumentException("AsyncResult object was not created by calling BeginWrite on this class.");
                 LogAndThrowException(new ArgumentException("AsyncResult object was not created by calling BeginWrite on this class."));
-            }
 
             USBAsyncResult result = (USBAsyncResult)asyncResult;
             try
@@ -364,15 +352,11 @@ namespace MadWizard.WinUSBNet
                 // todo: check duplicate end writes?
 
                 if (!result.IsCompleted)
-                {
                     result.AsyncWaitHandle.WaitOne();
-                }
 
                 if (result.Error != null)
-                {
                     // throw new USBException("Asynchronous write to pipe has failed.", result.Error);
                     LogAndThrowException(new USBException("Asynchronous write to pipe has failed.", result.Error));
-                }
             }
             finally
             {
@@ -387,7 +371,7 @@ namespace MadWizard.WinUSBNet
         {
             try
             {
-                Device.InternalDevice.AbortPipe(Interface.InterfaceIndex, _pipeInfo.PipeId);
+                _device.InternalDevice.AbortPipe(Interface.InterfaceIndex, _pipeInfo.PipeId);
             }
             catch (API.APIException e)
             {
@@ -395,36 +379,17 @@ namespace MadWizard.WinUSBNet
                 LogAndThrowException(new USBException("Failed to abort pipe.", e));
             }
         }
-
-        /// <summary>
-        /// Resets all pending transfers for this pipe.
-        /// </summary>
-        public void Reset()
-        {
-            try
-            {
-                Device.InternalDevice.ResetPipe(Interface.InterfaceIndex, _pipeInfo.PipeId);
-            }
-            catch (API.APIException e)
-            {
-                // throw new USBException("Failed to reset pipe.", e);
-                LogAndThrowException(new USBException("Failed to reset pipe.", e));
-            }
-        }
-
+        
         /// <summary>
         /// Flushes the pipe, discarding any data that is cached. Only available on IN direction pipes.
         /// </summary>
         public void Flush()
         {
             if (!IsIn)
-            {
                 throw new NotSupportedException("Flush is only supported on IN direction pipes");
-            }
-
             try
             {
-                Device.InternalDevice.FlushPipe(Interface.InterfaceIndex, _pipeInfo.PipeId);
+                _device.InternalDevice.FlushPipe(Interface.InterfaceIndex, _pipeInfo.PipeId);
             }
             catch (API.APIException e)
             {
@@ -436,7 +401,7 @@ namespace MadWizard.WinUSBNet
         internal USBPipe(USBDevice device, API.WINUSB_PIPE_INFORMATION pipeInfo)
         {
             _pipeInfo = pipeInfo;
-            Device = device;
+            _device = device;
 
             // Policy is not set until interface is attached
             _policy = null;
@@ -447,31 +412,24 @@ namespace MadWizard.WinUSBNet
             _interface = usbInterface;
 
             // Initialize policy now that interface is set (policy requires interface)
-            _policy = new USBPipePolicy(Device, _interface.InterfaceIndex, _pipeInfo.PipeId);
+            _policy = new USBPipePolicy(_device, _interface.InterfaceIndex, _pipeInfo.PipeId);
         }
-
+        
         private void LogException(Exception Ex)
         {
             WPinternals.LogFile.Log("Error on USB port!", WPinternals.LogType.FileOnly);
-            WPinternals.LogFile.Log("Device: " + Device.Descriptor.FullName, WPinternals.LogType.FileOnly);
+            WPinternals.LogFile.Log("Device: " + _device.Descriptor.FullName, WPinternals.LogType.FileOnly);
 
             if (IsIn)
-            {
-                LastWritten = Device.OutputPipe.LastWritten;
-            }
+                LastWritten = _device.OutputPipe.LastWritten;
 
-            if ((LastWritten == null) && (Ex is USBException) && (Ex.InnerException is API.APIException) &&
-                (((API.APIException)Ex.InnerException).InnerException is System.ComponentModel.Win32Exception) &&
+            if ((LastWritten == null) && (Ex is USBException) && (Ex.InnerException is MadWizard.WinUSBNet.API.APIException) &&
+                (((MadWizard.WinUSBNet.API.APIException)Ex.InnerException).InnerException is System.ComponentModel.Win32Exception) &&
                 (((System.ComponentModel.Win32Exception)Ex.InnerException.InnerException).NativeErrorCode == 0X1F))
-            {
-                WPinternals.LogFile.Log("Failed to communicate on new USB connection", WPinternals.LogType.FileAndConsole);
-            }
+                    WPinternals.LogFile.Log("Failed to communicate on new USB connection", WPinternals.LogType.FileAndConsole);
 
             if (LastWritten != null)
-            {
                 WPinternals.LogFile.Log("Last written: " + WPinternals.Converter.ConvertHexToString(LastWritten, ""), WPinternals.LogType.FileOnly);
-            }
-
             WPinternals.LogFile.LogException(Ex, WPinternals.LogType.FileOnly);
         }
 
@@ -486,4 +444,5 @@ namespace MadWizard.WinUSBNet
             System.Buffer.BlockCopy(Buffer, Offset, LastWritten, 0, LastWritten.Length);
         }
     }
+
 }

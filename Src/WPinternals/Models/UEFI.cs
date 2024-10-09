@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -39,22 +39,22 @@ namespace WPinternals
     {
         internal byte[] Binary;
         private byte[] DecompressedImage;
-        internal List<EFI> EFIs = new();
-        private readonly byte PaddingByteValue = 0xFF;
-        private readonly UInt32 DecompressedVolumeSectionHeaderOffset;
-        private readonly UInt32 DecompressedVolumeHeaderOffset;
-        private readonly UInt32 VolumeSize;
-        private readonly UInt16 VolumeHeaderSize;
-        private readonly UInt32 FileHeaderOffset;
-        private readonly UInt32 SectionHeaderOffset;
-        private readonly UInt32 CompressedSubImageOffset;
+        internal List<EFI> EFIs = new List<EFI>();
+        private byte PaddingByteValue = 0xFF;
+        private UInt32 DecompressedVolumeSectionHeaderOffset;
+        private UInt32 DecompressedVolumeHeaderOffset;
+        private UInt32 VolumeSize;
+        private UInt16 VolumeHeaderSize;
+        private UInt32 FileHeaderOffset;
+        private UInt32 SectionHeaderOffset;
+        private UInt32 CompressedSubImageOffset;
         private UInt32 CompressedSubImageSize;
 
         // First 0x28 bytes are Qualcomm partition header
         // Inside the attributes of the VolumeHeader, the Volume-alignment is set to 8 (on Windows Phone UEFI images)
         // The Volume always starts right after the Qualcomm header at position 0x28.
         // So the VolumeHeader-alignment is always complied.
-        private readonly UInt32 VolumeHeaderOffset = 0x28;
+        private UInt32 VolumeHeaderOffset = 0x28;
 
         internal UEFI(byte[] UefiBinary)
         {
@@ -62,12 +62,13 @@ namespace WPinternals
 
             string VolumeHeaderMagic;
             UInt32? Offset = ByteOperations.FindAscii(Binary, "_FVH");
-            VolumeHeaderOffset = Offset == null ? throw new BadImageFormatException() : (UInt32)Offset - 0x28;
+            if (Offset == null)
+                throw new BadImageFormatException();
+            else
+                VolumeHeaderOffset = (UInt32)Offset - 0x28;
 
             if (!VerifyVolumeChecksum(Binary, VolumeHeaderOffset))
-            {
                 throw new BadImageFormatException();
-            }
 
             VolumeSize = ByteOperations.ReadUInt32(Binary, VolumeHeaderOffset + 0x20); // TODO: This is actually a QWORD
             VolumeHeaderSize = ByteOperations.ReadUInt16(Binary, VolumeHeaderOffset + 0x30);
@@ -82,9 +83,7 @@ namespace WPinternals
             do
             {
                 if (!VerifyFileChecksum(Binary, FileHeaderOffset))
-                {
                     throw new BadImageFormatException();
-                }
 
                 FileType = ByteOperations.ReadUInt8(Binary, FileHeaderOffset + 0x12);
                 FileSize = ByteOperations.ReadUInt24(Binary, FileHeaderOffset + 0x14);
@@ -106,9 +105,7 @@ namespace WPinternals
             while (!VolumeFound && (FileHeaderOffset < (VolumeHeaderOffset + VolumeSize)));
 
             if (!VolumeFound)
-            {
                 throw new BadImageFormatException();
-            }
 
             // Look in file for section of type EFI_SECTION_GUID_DEFINED (0x02)
 
@@ -139,9 +136,7 @@ namespace WPinternals
             while (!DecompressedVolumeFound && (SectionHeaderOffset < (FileHeaderOffset + FileSize)));
 
             if (!DecompressedVolumeFound)
-            {
                 throw new BadImageFormatException();
-            }
 
             // Decompress subvolume
             CompressedSubImageOffset = SectionHeaderOffset + SectionHeaderSize;
@@ -175,23 +170,17 @@ namespace WPinternals
             while (!DecompressedVolumeFound && (DecompressedVolumeSectionHeaderOffset < DecompressedImage.Length));
 
             if (!DecompressedVolumeFound)
-            {
                 throw new BadImageFormatException();
-            }
 
             DecompressedVolumeHeaderOffset = DecompressedVolumeSectionHeaderOffset + 4;
 
             // PARSE COMPRESSED VOLUME
             VolumeHeaderMagic = ByteOperations.ReadAsciiString(DecompressedImage, DecompressedVolumeHeaderOffset + 0x28, 0x04);
             if (VolumeHeaderMagic != "_FVH")
-            {
                 throw new BadImageFormatException();
-            }
 
             if (!VerifyVolumeChecksum(DecompressedImage, DecompressedVolumeHeaderOffset))
-            {
                 throw new BadImageFormatException();
-            }
 
             Int32 DecompressedVolumeSize = ByteOperations.ReadInt32(DecompressedImage, DecompressedVolumeHeaderOffset + 0x20); // TODO: This is actually a QWORD
             UInt16 DecompressedVolumeHeaderSize = ByteOperations.ReadUInt16(DecompressedImage, DecompressedVolumeHeaderOffset + 0x30);
@@ -202,9 +191,7 @@ namespace WPinternals
             do
             {
                 if ((DecompressedFileHeaderOffset + 0x18) >= (DecompressedVolumeHeaderOffset + DecompressedVolumeSize))
-                {
                     break;
-                }
 
                 bool ContentFound = false;
                 for (int i = 0; i < 0x18; i++)
@@ -216,28 +203,21 @@ namespace WPinternals
                     }
                 }
                 if (!ContentFound)
-                {
                     break;
-                }
 
                 FileSize = ByteOperations.ReadUInt24(DecompressedImage, DecompressedFileHeaderOffset + 0x14);
 
                 if ((DecompressedFileHeaderOffset + FileSize) >= (DecompressedVolumeHeaderOffset + DecompressedVolumeSize))
-                {
                     break;
-                }
 
                 if (!VerifyFileChecksum(DecompressedImage, DecompressedFileHeaderOffset))
-                {
                     throw new BadImageFormatException();
-                }
 
-                CurrentEFI = new EFI
-                {
-                    Type = ByteOperations.ReadUInt8(DecompressedImage, DecompressedFileHeaderOffset + 0x12)
-                };
+                CurrentEFI = new EFI();
+
+                CurrentEFI.Type = ByteOperations.ReadUInt8(DecompressedImage, DecompressedFileHeaderOffset + 0x12);
                 byte[] FileGuidBytes = new byte[0x10];
-                Buffer.BlockCopy(DecompressedImage, (int)DecompressedFileHeaderOffset + 0x00, FileGuidBytes, 0, 0x10);
+                System.Buffer.BlockCopy(DecompressedImage, (int)DecompressedFileHeaderOffset + 0x00, FileGuidBytes, 0, 0x10);
                 CurrentEFI.Guid = new Guid(FileGuidBytes);
 
                 // Parse sections of the EFI
@@ -256,7 +236,7 @@ namespace WPinternals
                     // but the sections that are used in Windows Phone EFI's all have a header of 4 bytes.
                     if (SectionType == 0x15)
                     {
-                        CurrentEFI.Name = ByteOperations.ReadUnicodeString(DecompressedImage, DecompressedSectionHeaderOffset + 0x04, SectionSize - 0x04).TrimEnd([(char)0, ' ']);
+                        CurrentEFI.Name = ByteOperations.ReadUnicodeString(DecompressedImage, DecompressedSectionHeaderOffset + 0x04, SectionSize - 0x04).TrimEnd(new char[] { (char)0, ' ' });
                     }
                     else if ((SectionType == 0x10) || (SectionType == 0x19))
                     {
@@ -286,11 +266,9 @@ namespace WPinternals
 
         internal byte[] GetFile(string Name)
         {
-            EFI File = EFIs.Find(f => string.Equals(Name, f.Name, StringComparison.CurrentCultureIgnoreCase) || string.Equals(Name, f.Guid.ToString(), StringComparison.CurrentCultureIgnoreCase));
+            EFI File = EFIs.Where(f => (string.Compare(Name, f.Name, true) == 0) || (string.Compare(Name, f.Guid.ToString(), true) == 0)).FirstOrDefault();
             if (File == null)
-            {
                 return null;
-            }
 
             byte[] Bytes = new byte[File.Size];
             Buffer.BlockCopy(DecompressedImage, (int)File.BinaryOffset, Bytes, 0, (int)File.Size);
@@ -300,11 +278,9 @@ namespace WPinternals
 
         internal byte[] GetFile(Guid Guid)
         {
-            EFI File = EFIs.Find(f => Guid == f.Guid);
+            EFI File = EFIs.Where(f => (Guid == f.Guid)).FirstOrDefault();
             if (File == null)
-            {
                 return null;
-            }
 
             byte[] Bytes = new byte[File.Size];
             Buffer.BlockCopy(DecompressedImage, (int)File.BinaryOffset, Bytes, 0, (int)File.Size);
@@ -314,11 +290,9 @@ namespace WPinternals
 
         internal void ReplaceFile(string Name, byte[] Binary)
         {
-            EFI File = EFIs.Find(f => string.Equals(Name, f.Name, StringComparison.CurrentCultureIgnoreCase) || string.Equals(Name, f.Guid.ToString(), StringComparison.CurrentCultureIgnoreCase));
+            EFI File = EFIs.Where(f => (string.Compare(Name, f.Name, true) == 0) || (string.Compare(Name, f.Guid.ToString(), true) == 0)).FirstOrDefault();
             if (File == null)
-            {
                 throw new ArgumentOutOfRangeException();
-            }
 
             UInt32 OldBinarySize = File.Size;
             UInt32 NewBinarySize = (UInt32)Binary.Length;
@@ -344,28 +318,24 @@ namespace WPinternals
 
                 // Insert section-padding
                 for (int i = 0; i < NewSectionPadding; i++)
-                {
                     NewImage[File.BinaryOffset + NewBinarySize + i] = PaddingByteValue;
-                }
 
                 // Copy file-tail
                 Buffer.BlockCopy(
                     DecompressedImage,
                     (int)(File.BinaryOffset + OldBinarySize + OldSectionPadding),
-                    NewImage,
+                    NewImage, 
                     (int)(File.BinaryOffset + NewBinarySize + NewSectionPadding),
                     (int)(File.FileOffset + OldFileSize - File.BinaryOffset - OldBinarySize - OldSectionPadding));
 
                 // Insert file-padding
                 for (int i = 0; i < NewFilePadding; i++)
-                {
                     NewImage[File.BinaryOffset + NewFileSize + i] = PaddingByteValue;
-                }
 
                 // Copy volume-tail
                 Buffer.BlockCopy(
-                    DecompressedImage,
-                    (int)(File.FileOffset + OldFileSize + OldFilePadding),
+                    DecompressedImage, 
+                    (int)(File.FileOffset + OldFileSize + OldFilePadding), 
                     NewImage,
                     (int)(File.FileOffset + NewFileSize + NewFilePadding),
                     (int)(DecompressedImage.Length - File.FileOffset - OldFileSize - OldFilePadding));
@@ -401,9 +371,7 @@ namespace WPinternals
             {
                 Buffer.BlockCopy(Binary, 0, DecompressedImage, (int)File.BinaryOffset, Binary.Length);
                 for (int i = 0; i < NewSectionPadding; i++)
-                {
                     DecompressedImage[File.BinaryOffset + Binary.Length + i] = PaddingByteValue;
-                }
             }
 
             // Calculate File-checksum
@@ -418,7 +386,7 @@ namespace WPinternals
             // The new binary will include the Qualcomm header, but not the signature and certificates, because they won't match anyway.
             byte[] NewBinary = new byte[Binary.Length];
             Buffer.BlockCopy(Binary, 0, NewBinary, 0, (int)CompressedSubImageOffset);
-
+            
             ByteOperations.WriteUInt32(NewBinary, 0x10, ByteOperations.ReadUInt32(NewBinary, 0x14)); // Complete image size - does not include signature and certs anymore
             ByteOperations.WriteUInt32(NewBinary, 0x18, 0x00000000); // Address of signature
             ByteOperations.WriteUInt32(NewBinary, 0x1C, 0x00000000); // Signature length
@@ -440,42 +408,32 @@ namespace WPinternals
             // Filesize includes fileheader. But it does not include the padding-bytes. Not even the padding bytes of the last section.
             UInt32 NewFileSize;
             if ((CompressedSubImageOffset + CompressedSubImageSize + OldSectionPadding) >= (FileHeaderOffset + OldFileSize))
-            {
                 // Compressed image is the last section of this file
                 NewFileSize = CompressedSubImageOffset - FileHeaderOffset + (UInt32)NewCompressedImage.Length;
-            }
             else
-            {
                 // Compressed image is NOT the last section of this file
                 NewFileSize = OldFileSize - CompressedSubImageSize - OldSectionPadding + (UInt32)NewCompressedImage.Length + NewSectionPadding;
-            }
 
             // Add section padding
             for (int i = 0; i < NewSectionPadding; i++)
-            {
                 NewBinary[CompressedSubImageOffset + NewCompressedImage.Length + i] = PaddingByteValue;
-            }
 
             // If there are more bytes after the section padding of the compressed image, then copy the trailing sections
             if (((Int32)FileHeaderOffset + OldFileSize - CompressedSubImageOffset - CompressedSubImageSize - OldSectionPadding) > 0)
-            {
                 Buffer.BlockCopy(Binary, (int)(CompressedSubImageOffset + CompressedSubImageSize + OldSectionPadding), NewBinary,
                     (int)(CompressedSubImageOffset + NewCompressedImage.Length + NewSectionPadding),
                     (int)(FileHeaderOffset + OldFileSize - CompressedSubImageOffset - CompressedSubImageSize - OldSectionPadding));
-            }
 
             // Add file padding
             // Filesize does not include last section padding or file padding
             UInt32 OldFilePadding = ByteOperations.Align(0, OldFileSize, 8) - OldFileSize;
             UInt32 NewFilePadding = ByteOperations.Align(0, NewFileSize, 8) - NewFileSize;
             for (int i = 0; i < NewFilePadding; i++)
-            {
                 NewBinary[FileHeaderOffset + NewFileSize + i] = PaddingByteValue;
-            }
 
             if (NewCompressedImage.Length > CompressedSubImageSize)
             {
-                Buffer.BlockCopy(Binary, (int)(FileHeaderOffset + OldFileSize + OldFilePadding), NewBinary, (int)(FileHeaderOffset + NewFileSize + NewFilePadding),
+                Buffer.BlockCopy(Binary, (int)(FileHeaderOffset + OldFileSize + OldFilePadding), NewBinary, (int)(FileHeaderOffset + NewFileSize + NewFilePadding), 
                     (int)(VolumeHeaderOffset + VolumeSize - FileHeaderOffset - NewFileSize - NewFilePadding));
             }
             else
@@ -483,9 +441,7 @@ namespace WPinternals
                 Buffer.BlockCopy(Binary, (int)(FileHeaderOffset + OldFileSize + OldFilePadding), NewBinary, (int)(FileHeaderOffset + NewFileSize + NewFilePadding),
                     (int)(VolumeHeaderOffset + VolumeSize - FileHeaderOffset - OldFileSize - OldFilePadding));
                 for (int i = (int)(VolumeHeaderOffset + VolumeSize - OldFileSize - OldFilePadding + NewFileSize + NewFilePadding); i < VolumeHeaderOffset + VolumeSize; i++)
-                {
                     NewBinary[i] = PaddingByteValue;
-                }
             }
             CompressedSubImageSize = (UInt32)NewCompressedImage.Length;
 
@@ -515,16 +471,16 @@ namespace WPinternals
         {
             UInt16 VolumeHeaderSize = ByteOperations.ReadUInt16(Image, Offset + 0x30);
             byte[] Header = new byte[VolumeHeaderSize];
-            Buffer.BlockCopy(Image, (int)Offset, Header, 0, VolumeHeaderSize);
+            System.Buffer.BlockCopy(Image, (int)Offset, Header, 0, VolumeHeaderSize);
             ByteOperations.WriteUInt16(Header, 0x32, 0); // Clear checksum
             UInt16 CurrentChecksum = ByteOperations.ReadUInt16(Image, Offset + 0x32);
             UInt16 NewChecksum = ByteOperations.CalculateChecksum16(Header, 0, VolumeHeaderSize);
-            return CurrentChecksum == NewChecksum;
+            return (CurrentChecksum == NewChecksum);
         }
 
         private void CalculateFileChecksum(byte[] Image, UInt32 Offset)
         {
-            const UInt16 FileHeaderSize = 0x18;
+            UInt16 FileHeaderSize = 0x18;
             UInt32 FileSize = ByteOperations.ReadUInt24(Image, Offset + 0x14);
 
             ByteOperations.WriteUInt16(Image, Offset + 0x10, 0); // Clear checksum
@@ -549,19 +505,17 @@ namespace WPinternals
         {
             // This function only checks fixed checksum-values 0x55 and 0xAA.
 
-            const UInt16 FileHeaderSize = 0x18;
+            UInt16 FileHeaderSize = 0x18;
             UInt32 FileSize = ByteOperations.ReadUInt24(Image, Offset + 0x14);
 
             byte[] Header = new byte[FileHeaderSize - 1];
-            Buffer.BlockCopy(Image, (int)Offset, Header, 0, FileHeaderSize - 1);
+            System.Buffer.BlockCopy(Image, (int)Offset, Header, 0, FileHeaderSize - 1);
             ByteOperations.WriteUInt16(Header, 0x10, 0); // Clear checksum
             byte CurrentHeaderChecksum = ByteOperations.ReadUInt8(Image, Offset + 0x10);
             byte CalculatedHeaderChecksum = ByteOperations.CalculateChecksum8(Header, 0, (UInt32)FileHeaderSize - 1);
 
             if (CurrentHeaderChecksum != CalculatedHeaderChecksum)
-            {
                 return false;
-            }
 
             byte FileAttribs = ByteOperations.ReadUInt8(Image, Offset + 0x13);
             byte CurrentFileChecksum = ByteOperations.ReadUInt8(Image, Offset + 0x11);
@@ -570,17 +524,13 @@ namespace WPinternals
                 // Calculate file checksum
                 byte CalculatedFileChecksum = ByteOperations.CalculateChecksum8(Image, Offset + FileHeaderSize, FileSize - FileHeaderSize);
                 if (CurrentFileChecksum != CalculatedFileChecksum)
-                {
                     return false;
-                }
             }
             else
             {
                 // Fixed file checksum
                 if ((CurrentFileChecksum != 0xAA) && (CurrentFileChecksum != 0x55))
-                {
                     return false;
-                }
             }
 
             return true;
@@ -598,15 +548,13 @@ namespace WPinternals
             byte[] SecurityDxe = GetFile("SecurityDxe");
             ClearEfiChecksum(SecurityDxe);
 
-            UInt32? PatchOffset = ByteOperations.FindPattern(SecurityDxe,
-                [0xF0, 0x41, 0x2D, 0xE9, 0xFF, 0xFF, 0xB0, 0xE1, 0x28, 0xD0, 0x4D, 0xE2, 0xFF, 0xFF, 0xA0, 0xE1, 0x00, 0x00, 0xFF, 0x13, 0x20, 0xFF, 0xA0, 0xE3],
-                [0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00],
+            UInt32? PatchOffset = ByteOperations.FindPattern(SecurityDxe, 
+                new byte[] { 0xF0, 0x41, 0x2D, 0xE9, 0xFF, 0xFF, 0xB0, 0xE1, 0x28, 0xD0, 0x4D, 0xE2, 0xFF, 0xFF, 0xA0, 0xE1, 0x00, 0x00, 0xFF, 0x13, 0x20, 0xFF, 0xA0, 0xE3 }, 
+                new byte[] { 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00 },
                 null);
 
             if (PatchOffset == null)
-            {
                 throw new BadImageFormatException();
-            }
 
             Buffer.BlockCopy(new byte[] { 0x00, 0x00, 0xA0, 0xE3, 0x1E, 0xFF, 0x2F, 0xE1 }, 0, SecurityDxe, (int)PatchOffset, 8);
 
@@ -616,26 +564,22 @@ namespace WPinternals
             ClearEfiChecksum(SecurityServicesDxe);
 
             PatchOffset = ByteOperations.FindPattern(SecurityServicesDxe,
-                [0x10, 0xFF, 0xFF, 0xE5, 0x80, 0xFF, 0x10, 0xE3, 0xFF, 0xFF, 0xFF, 0x0A],
-                [0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00],
+                new byte[] { 0x10, 0xFF, 0xFF, 0xE5, 0x80, 0xFF, 0x10, 0xE3, 0xFF, 0xFF, 0xFF, 0x0A },
+                new byte[] { 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00 },
                 null);
 
             if (PatchOffset == null)
-            {
                 throw new BadImageFormatException();
-            }
 
             ByteOperations.WriteUInt8(SecurityServicesDxe, (UInt32)PatchOffset + 0x0B, 0xEA);
 
             PatchOffset = ByteOperations.FindPattern(SecurityServicesDxe,
-                [0x11, 0xFF, 0xFF, 0xE5, 0x40, 0xFF, 0x10, 0xE3, 0xFF, 0xFF, 0xFF, 0x0A],
-                [0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00],
+                new byte[] { 0x11, 0xFF, 0xFF, 0xE5, 0x40, 0xFF, 0x10, 0xE3, 0xFF, 0xFF, 0xFF, 0x0A },
+                new byte[] { 0x00, 0xFF, 0xFF, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0x00 },
                 null);
 
             if (PatchOffset == null)
-            {
                 throw new BadImageFormatException();
-            }
 
             ByteOperations.WriteUInt8(SecurityServicesDxe, (UInt32)PatchOffset + 0x0B, 0xEA);
 

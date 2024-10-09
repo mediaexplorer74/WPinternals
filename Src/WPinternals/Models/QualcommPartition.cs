@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -19,7 +19,6 @@
 // DEALINGS IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 
@@ -48,20 +47,20 @@ namespace WPinternals
         internal uint CertificatesOffset;
         internal byte[] RootKeyHash = null;
 
-        internal QualcommPartition(string Path) : this(File.ReadAllBytes(Path)) { }
+        internal QualcommPartition(string Path): this(File.ReadAllBytes(Path)) { }
 
         internal QualcommPartition(byte[] Binary, uint Offset = 0)
         {
 #if DEBUG
-            System.Diagnostics.Debug.Print("Loader: " + Converter.ConvertHexToString(SHA256.HashData(Binary.AsSpan(0, Binary.Length)), ""));
+            System.Diagnostics.Debug.Print("Loader: " + Converter.ConvertHexToString(new SHA256Managed().ComputeHash(Binary, 0, Binary.Length), ""));
 #endif
 
             this.Binary = Binary;
 
-            byte[] LongHeaderPattern = [0xD1, 0xDC, 0x4B, 0x84, 0x34, 0x10, 0xD7, 0x73, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF];
-            byte[] LongHeaderMask = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+            byte[] LongHeaderPattern = new byte[] { 0xD1, 0xDC, 0x4B, 0x84, 0x34, 0x10, 0xD7, 0x73, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF };
+            byte[] LongHeaderMask = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
-            if (ByteOperations.FindPattern(Binary, Offset, 4, [0x7F, 0x45, 0x4C, 0x46], [0x00, 0x00, 0x00, 0x00], null) == 0)
+            if (ByteOperations.FindPattern(Binary, Offset, 4, new byte[] { 0x7F, 0x45, 0x4C, 0x46 }, new byte[] { 0x00, 0x00, 0x00, 0x00 }, null) == 0)
             {
                 // This is an ELF image
                 // First program header is a reference to the elf-header
@@ -89,9 +88,7 @@ namespace WPinternals
                     HeaderOffset = ImageOffset + 8;
                 }
                 else
-                {
-                    throw new WPinternalsException("Invalid programmer", "The type of elf image could not be determined from the provided programmer.");
-                }
+                    throw new WPinternalsException("Invalid programmer");
             }
             else if (ByteOperations.FindPattern(Binary, Offset, (uint)LongHeaderPattern.Length, LongHeaderPattern, LongHeaderMask, null) == null)
             {
@@ -107,17 +104,11 @@ namespace WPinternals
             }
 
             if (ByteOperations.ReadUInt32(Binary, HeaderOffset + 0X00) != 0)
-            {
                 ImageOffset = ByteOperations.ReadUInt32(Binary, HeaderOffset + 0X00);
-            }
             else if (HeaderType == QualcommPartitionHeaderType.Short)
-            {
                 ImageOffset += 0x28;
-            }
             else
-            {
                 ImageOffset += 0x50;
-            }
 
             ImageAddress = ByteOperations.ReadUInt32(Binary, HeaderOffset + 0X04);
             ImageSize = ByteOperations.ReadUInt32(Binary, HeaderOffset + 0X08);
@@ -129,58 +120,45 @@ namespace WPinternals
             CertificatesSize = ByteOperations.ReadUInt32(Binary, HeaderOffset + 0X1C);
             CertificatesOffset = CertificatesAddress - ImageAddress + ImageOffset;
 
-            using MemoryStream fileStream = new(Binary);
-            using BinaryReader reader = new(fileStream);
-
-            List<byte[]> Signatures = [];
-            uint LastOffset = 0;
-
-            for (uint i = 0; i < fileStream.Length - 6; i++)
+            uint CurrentCertificateOffset = CertificatesOffset;
+            uint CertificateSize = 0;
+            while (CurrentCertificateOffset < (CertificatesOffset + CertificatesSize))
             {
-                fileStream.Seek(i, SeekOrigin.Begin);
-
-                ushort offset0 = reader.ReadUInt16();
-                short offset1 = (short)((reader.ReadByte() << 8) | reader.ReadByte());
-                ushort offset2 = reader.ReadUInt16();
-
-                if (offset0 == 0x8230 && offset1 >= 0 && offset2 == 0x8230)
+                if ((Binary[CurrentCertificateOffset] == 0x30) && (Binary[CurrentCertificateOffset + 1] == 0x82))
                 {
-                    uint CertificateSize = (uint)offset1 + 4; // Header Size is 4
+                    CertificateSize = (uint)(Binary[CurrentCertificateOffset + 2] * 0x100) + Binary[CurrentCertificateOffset + 3] + 4; // Big endian!
 
-                    bool IsCertificatePartOfExistingChain = LastOffset == 0 || LastOffset == i;
-                    if (!IsCertificatePartOfExistingChain)
-                    {
-                        break;
-                    }
-
-                    LastOffset = i + CertificateSize;
-
-                    fileStream.Seek(i, SeekOrigin.Begin);
-                    Signatures.Add(reader.ReadBytes((int)CertificateSize));
-                }
-            }
-
-            if (Signatures.Count > 0)
-            {
-                byte[] RootCertificate = Signatures[^1];
-
-                for (int i = 0; i < Signatures.Count; i++)
-                {
-                    if (i + 1 != Signatures.Count)
-                    {
-#if DEBUG
-                        System.Diagnostics.Debug.Print("Cert: " + Converter.ConvertHexToString(SHA256.HashData(Signatures[i]), ""));
-#endif
-                    }
-                    else
+                    if ((CurrentCertificateOffset + CertificateSize) == (CertificatesOffset + CertificatesSize))
                     {
                         // This is the last certificate. So this is the root key.
-                        RootKeyHash = SHA256.HashData(Signatures[i]);
+                        RootKeyHash = new SHA256Managed().ComputeHash(Binary, (int)CurrentCertificateOffset, (int)CertificateSize);
 
 #if DEBUG
                         System.Diagnostics.Debug.Print("RKH: " + Converter.ConvertHexToString(RootKeyHash, ""));
 #endif
                     }
+#if DEBUG
+                    else
+                    {
+                        System.Diagnostics.Debug.Print("Cert: " + Converter.ConvertHexToString(new SHA256Managed().ComputeHash(Binary, (int)CurrentCertificateOffset, (int)CertificateSize), ""));
+                    }
+#endif
+                    CurrentCertificateOffset += CertificateSize;
+                }
+                else
+                {
+                    if ((RootKeyHash == null) && (CurrentCertificateOffset > CertificatesOffset))
+                    {
+                        CurrentCertificateOffset -= CertificateSize;
+
+                        // This is the last certificate. So this is the root key.
+                        RootKeyHash = new SHA256Managed().ComputeHash(Binary, (int)CurrentCertificateOffset, (int)CertificateSize);
+
+#if DEBUG
+                        System.Diagnostics.Debug.Print("RKH: " + Converter.ConvertHexToString(RootKeyHash, ""));
+#endif
+                    }
+                    break;
                 }
             }
         }

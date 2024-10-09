@@ -1,11 +1,13 @@
-/*  WinUSBNet library
+﻿/*  WinUSBNet library
  *  (C) 2010 Thomas Bleeker (www.madwizard.org)
- *
+ *  
  *  Licensed under the MIT license, see license.txt or:
  *  http://www.opensource.org/licenses/mit-license.php
  */
 
 using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace MadWizard.WinUSBNet
 {
@@ -20,6 +22,7 @@ namespace MadWizard.WinUSBNet
         public USBPipeCollection Pipes
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -28,14 +31,16 @@ namespace MadWizard.WinUSBNet
         public int Number
         {
             get;
+            private set;
         }
-
+      
         /// <summary>
         /// USB device associated with this interface
         /// </summary>
         public USBDevice Device
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -44,6 +49,7 @@ namespace MadWizard.WinUSBNet
         public USBPipe InPipe
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -52,6 +58,7 @@ namespace MadWizard.WinUSBNet
         public USBPipe OutPipe
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -62,16 +69,18 @@ namespace MadWizard.WinUSBNet
         public USBBaseClass BaseClass
         {
             get;
+            private set;
         }
 
         /// <summary>
         /// Interface class code as defined in the interface descriptor
         /// This property can be used if the class type is not defined
-        /// int the USBBaseClass enumeration
+        /// int the USBBaseClass enumeraiton
         /// </summary>
         public byte ClassValue
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -80,6 +89,7 @@ namespace MadWizard.WinUSBNet
         public byte SubClass
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -88,17 +98,17 @@ namespace MadWizard.WinUSBNet
         public byte Protocol
         {
             get;
+            private set;
         }
-
-        /// <summary>
+       
         /// Zero based interface index in WinUSB.
         /// Note that this is not necessarily the same as the interface *number*
         /// from the interface descriptor. There might be interfaces within the
         /// USB device that do not use WinUSB, these are not counted for index.
-        /// </summary>
         internal int InterfaceIndex
         {
             get;
+            private set;
         }
 
         internal USBInterface(USBDevice device, int interfaceIndex, API.USB_INTERFACE_DESCRIPTOR rawDesc, USBPipeCollection pipes)
@@ -116,8 +126,9 @@ namespace MadWizard.WinUSBNet
             BaseClass = USBBaseClass.Unknown;
             if (Enum.IsDefined(typeof(USBBaseClass), (int)rawDesc.bInterfaceClass))
             {
-                BaseClass = (USBBaseClass)rawDesc.bInterfaceClass;
+                BaseClass = (USBBaseClass)(int)rawDesc.bInterfaceClass;
             }
+           
 
             Device = device;
             Pipes = pipes;
@@ -130,15 +141,12 @@ namespace MadWizard.WinUSBNet
 
                 // If first in or out pipe, set InPipe and OutPipe
                 if (pipe.IsIn && InPipe == null)
-                {
                     InPipe = pipe;
-                }
-
                 if (pipe.IsOut && OutPipe == null)
-                {
                     OutPipe = pipe;
-                }
+
             }
+        
         }
     }
 }

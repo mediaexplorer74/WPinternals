@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -23,9 +23,9 @@ using System.Threading;
 
 namespace WPinternals
 {
-    internal class DumpRomTargetSelectionViewModel : ContextViewModel
+    internal class DumpRomTargetSelectionViewModel: ContextViewModel
     {
-        private readonly Action<string, string, bool, string, bool, string, bool> DumpCallback;
+        private Action<string, string, bool, string, bool, string, bool> DumpCallback;
         internal Action SwitchToUnlockBoot;
         internal Action SwitchToUnlockRoot;
         internal Action SwitchToFlashRom;
@@ -53,7 +53,7 @@ namespace WPinternals
                 if (value != _FFUPath)
                 {
                     _FFUPath = value;
-                    OnPropertyChanged(nameof(FFUPath));
+                    OnPropertyChanged("FFUPath");
                 }
             }
         }
@@ -70,7 +70,7 @@ namespace WPinternals
                 if (value != _EFIESPPath)
                 {
                     _EFIESPPath = value;
-                    OnPropertyChanged(nameof(EFIESPPath));
+                    OnPropertyChanged("EFIESPPath");
                 }
             }
         }
@@ -87,7 +87,7 @@ namespace WPinternals
                 if (value != _CompressEFIESP)
                 {
                     _CompressEFIESP = value;
-                    OnPropertyChanged(nameof(CompressEFIESP));
+                    OnPropertyChanged("CompressEFIESP");
                 }
             }
         }
@@ -104,7 +104,7 @@ namespace WPinternals
                 if (value != _MainOSPath)
                 {
                     _MainOSPath = value;
-                    OnPropertyChanged(nameof(MainOSPath));
+                    OnPropertyChanged("MainOSPath");
                 }
             }
         }
@@ -121,7 +121,7 @@ namespace WPinternals
                 if (value != _CompressMainOS)
                 {
                     _CompressMainOS = value;
-                    OnPropertyChanged(nameof(CompressMainOS));
+                    OnPropertyChanged("CompressMainOS");
                 }
             }
         }
@@ -138,7 +138,7 @@ namespace WPinternals
                 if (value != _DataPath)
                 {
                     _DataPath = value;
-                    OnPropertyChanged(nameof(DataPath));
+                    OnPropertyChanged("DataPath");
                 }
             }
         }
@@ -155,7 +155,7 @@ namespace WPinternals
                 if (value != _CompressData)
                 {
                     _CompressData = value;
-                    OnPropertyChanged(nameof(CompressData));
+                    OnPropertyChanged("CompressData");
                 }
             }
         }
@@ -172,7 +172,7 @@ namespace WPinternals
                 if (value != _IsPhoneDisconnected)
                 {
                     _IsPhoneDisconnected = value;
-                    OnPropertyChanged(nameof(IsPhoneDisconnected));
+                    OnPropertyChanged("IsPhoneDisconnected");
                 }
             }
         }
@@ -189,7 +189,7 @@ namespace WPinternals
                 if (value != _IsPhoneInMassStorage)
                 {
                     _IsPhoneInMassStorage = value;
-                    OnPropertyChanged(nameof(IsPhoneInMassStorage));
+                    OnPropertyChanged("IsPhoneInMassStorage");
                 }
             }
         }
@@ -206,7 +206,7 @@ namespace WPinternals
                 if (value != _IsPhoneInOtherMode)
                 {
                     _IsPhoneInOtherMode = value;
-                    OnPropertyChanged(nameof(IsPhoneInOtherMode));
+                    OnPropertyChanged("IsPhoneInOtherMode");
                 }
             }
         }
@@ -216,7 +216,11 @@ namespace WPinternals
         {
             get
             {
-                return _DumpCommand ??= new DelegateCommand(() => DumpCallback(FFUPath, EFIESPPath, CompressEFIESP, MainOSPath, CompressMainOS, DataPath, CompressData), () => (FFUPath != null) && ((EFIESPPath != null) || (MainOSPath != null) || (DataPath != null)));
+                if (_DumpCommand == null)
+                {
+                    _DumpCommand = new DelegateCommand(() => { DumpCallback(FFUPath, EFIESPPath, CompressEFIESP, MainOSPath, CompressMainOS, DataPath, CompressData); }, () => ((FFUPath != null) && ((EFIESPPath != null) || (MainOSPath != null) || (DataPath != null))));
+                }
+                return _DumpCommand;
             }
         }
 

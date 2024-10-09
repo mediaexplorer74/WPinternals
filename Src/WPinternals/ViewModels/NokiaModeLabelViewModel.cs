@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -24,8 +24,8 @@ namespace WPinternals
 {
     internal class NokiaModeLabelViewModel : ContextViewModel
     {
-        private readonly NokiaPhoneModel CurrentModel;
-        private readonly Action<PhoneInterfaces?> RequestModeSwitch;
+        private NokiaPhoneModel CurrentModel;
+        private Action<PhoneInterfaces?> RequestModeSwitch;
 
         internal NokiaModeLabelViewModel(NokiaPhoneModel CurrentModel, Action<PhoneInterfaces?> RequestModeSwitch)
             : base()
@@ -40,12 +40,6 @@ namespace WPinternals
             {
                 case "Normal":
                     RequestModeSwitch(PhoneInterfaces.Lumia_Normal);
-                    break;
-                case "PhoneInfo":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_PhoneInfo);
-                    break;
-                case "BootMgr":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_Bootloader);
                     break;
                 case "Flash":
                     RequestModeSwitch(PhoneInterfaces.Lumia_Flash);

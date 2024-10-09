@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -30,16 +30,16 @@ namespace WPinternals
 
     internal class NokiaFlashViewModel : ContextViewModel
     {
-        private readonly LumiaFlashAppModel CurrentModel;
-        private readonly Action<PhoneInterfaces> RequestModeSwitch;
+        private NokiaFlashModel CurrentModel;
+        private Action<PhoneInterfaces> RequestModeSwitch;
         internal Action SwitchToGettingStarted;
-        private readonly object LockDeviceInfo = new();
-        private bool DeviceInfoLoaded = false;
+        private object LockDeviceInfo = new object();
+        bool DeviceInfoLoaded = false;
 
         internal NokiaFlashViewModel(NokiaPhoneModel CurrentModel, Action<PhoneInterfaces> RequestModeSwitch, Action SwitchToGettingStarted)
             : base()
         {
-            this.CurrentModel = (LumiaFlashAppModel)CurrentModel;
+            this.CurrentModel = (NokiaFlashModel)CurrentModel;
             this.RequestModeSwitch = RequestModeSwitch;
             this.SwitchToGettingStarted = SwitchToGettingStarted;
         }
@@ -48,9 +48,7 @@ namespace WPinternals
         internal override void EvaluateViewState()
         {
             if (IsActive)
-            {
                 new Thread(() => StartLoadDeviceInfo()).Start();
-            }
         }
 
         private void StartLoadDeviceInfo()
@@ -94,27 +92,9 @@ namespace WPinternals
                         {
                             SecurityFlags = (UInt32)CurrentModel.ReadSecurityFlags();
                             LogFile.Log("Security flags: 0x" + SecurityFlags.ToString("X8"));
-
-                            FinalConfigDakStatus = CurrentModel.ReadFuseStatus(Fuse.Dak);
-                            FinalConfigFastBootStatus = CurrentModel.ReadFuseStatus(Fuse.FastBoot);
-                            FinalConfigFfuVerifyStatus = CurrentModel.ReadFuseStatus(Fuse.FfuVerify);
-                            FinalConfigJtagStatus = CurrentModel.ReadFuseStatus(Fuse.Jtag);
-                            FinalConfigOemIdStatus = CurrentModel.ReadFuseStatus(Fuse.OemId);
-                            FinalConfigProductionDoneStatus = CurrentModel.ReadFuseStatus(Fuse.ProductionDone);
-                            FinalConfigPublicIdStatus = CurrentModel.ReadFuseStatus(Fuse.PublicId);
-                            FinalConfigRkhStatus = CurrentModel.ReadFuseStatus(Fuse.Rkh);
-                            FinalConfigRpmWdogStatus = CurrentModel.ReadFuseStatus(Fuse.RpmWdog);
-                            FinalConfigSecGenStatus = CurrentModel.ReadFuseStatus(Fuse.SecGen);
-                            FinalConfigSecureBootStatus = CurrentModel.ReadFuseStatus(Fuse.SecureBoot);
-                            FinalConfigShkStatus = CurrentModel.ReadFuseStatus(Fuse.Shk);
-                            FinalConfigSimlockStatus = CurrentModel.ReadFuseStatus(Fuse.Simlock);
-                            FinalConfigSpdmSecModeStatus = CurrentModel.ReadFuseStatus(Fuse.SpdmSecMode);
-                            FinalConfigSsmStatus = CurrentModel.ReadFuseStatus(Fuse.Ssm);
                         }
                         else
-                        {
                             LogFile.Log("Security flags could not be read");
-                        }
 
                         PlatformName = CurrentModel.ReadStringParam("DPI");
                         LogFile.Log("Platform Name: " + PlatformName);
@@ -123,22 +103,15 @@ namespace WPinternals
                         // Instead read param RRKH to get the RKH.
                         PublicID = null;
                         byte[] RawPublicID = CurrentModel.ReadParam("PID");
-                        if (RawPublicID?.Length > 4)
+                        if ((RawPublicID != null) && (RawPublicID.Length > 4))
                         {
                             PublicID = new byte[RawPublicID.Length - 4];
                             Array.Copy(RawPublicID, 4, PublicID, 0, RawPublicID.Length - 4);
                             LogFile.Log("Public ID: " + Converter.ConvertHexToString(PublicID, " "));
                         }
-                        else
-                        {
-                            PublicID = new byte[20];
-                            LogFile.Log("Public ID: " + Converter.ConvertHexToString(PublicID, " "));
-                        }
                         RootKeyHash = CurrentModel.ReadParam("RRKH");
                         if (RootKeyHash != null)
-                        {
                             LogFile.Log("Root Key Hash: " + Converter.ConvertHexToString(RootKeyHash, " "));
-                        }
 
                         if (SecurityStatus != null)
                         {
@@ -164,123 +137,54 @@ namespace WPinternals
 
                         byte[] CID = CurrentModel.ReadParam("CID");
                         byte[] EMS = CurrentModel.ReadParam("EMS");
-                        if (CID != null && EMS != null)
+                        UInt16 MID = (UInt16)(((UInt16)CID[0] << 8) + CID[1]);
+                        UInt64 MemSize = (UInt64)(((UInt32)EMS[0] << 24) + ((UInt32)EMS[1] << 16) + ((UInt32)EMS[2] << 8) + EMS[3]) * 0x200;
+                        double MemSizeDouble = (double)MemSize / 1024 / 1024 / 1024;
+                        MemSizeDouble = (double)(int)(MemSizeDouble * 10) / 10;
+                        string Manufacturer = null;
+                        switch (MID)
                         {
-                            UInt16 MID = (UInt16)((CID[0] << 8) + CID[1]);
-                            UInt64 MemSize = (UInt64)(((UInt32)EMS[0] << 24) + ((UInt32)EMS[1] << 16) + ((UInt32)EMS[2] << 8) + EMS[3]) * 0x200;
-                            double MemSizeDouble = (double)MemSize / 1024 / 1024 / 1024;
-                            MemSizeDouble = (double)(int)(MemSizeDouble * 10) / 10;
-                            string Manufacturer = null;
-                            switch (MID)
-                            {
-                                case 0x0002:
-                                case 0x0045:
-                                    Manufacturer = "SanDisk";
-                                    break;
-                                case 0x0011:
-                                    Manufacturer = "Toshiba";
-                                    break;
-                                case 0x0013:
-                                    Manufacturer = "Micron";
-                                    break;
-                                case 0x0015:
-                                    Manufacturer = "Samsung";
-                                    break;
-                                case 0x0090:
-                                    Manufacturer = "Hynix";
-                                    break;
-                                case 0x0070:
-                                    Manufacturer = "Kingston";
-                                    break;
-                                case 0x00EC:
-                                    Manufacturer = "GigaDevice";
-                                    break;
-                            }
-                            eMMC = Manufacturer == null ? MemSizeDouble.ToString() + " GB" : Manufacturer + " " + MemSizeDouble.ToString() + " GB";
-
-                            SamsungWarningVisible = MID == 0x0015;
+                            case 0x0002:
+                            case 0x0045:
+                                Manufacturer = "SanDisk";
+                                break;
+                            case 0x0011:
+                                Manufacturer = "Toshiba";
+                                break;
+                            case 0x0013:
+                                Manufacturer = "Micron";
+                                break;
+                            case 0x0015:
+                                Manufacturer = "Samsung";
+                                break;
+                            case 0x0090:
+                                Manufacturer = "Hynix";
+                                break;
+                            case 0x0070:
+                                Manufacturer = "Kingston";
+                                break;
+                            case 0x00EC:
+                                Manufacturer = "GigaDevice";
+                                break;
                         }
+                        if (Manufacturer == null)
+                            eMMC = MemSizeDouble.ToString() + " GB";
                         else
-                        {
-                            eMMC = "Unknown";
-                            SamsungWarningVisible = true;
-                        }
+                            eMMC = Manufacturer + " " + MemSizeDouble.ToString() + " GB";
+                        SamsungWarningVisible = (MID == 0x0015);
 
-                        int? chargecurrent = CurrentModel.ReadCurrentChargeCurrent();
-
-                        if (chargecurrent.HasValue)
-                        {
-                            ChargingStatus = chargecurrent < 0
-                                ? CurrentModel.ReadCurrentChargeLevel() + "% - " + ((-1) * CurrentModel.ReadCurrentChargeCurrent()) + " mA (discharging)"
-                                : CurrentModel.ReadCurrentChargeLevel() + "% - " + CurrentModel.ReadCurrentChargeCurrent() + " mA (charging)";
-
-                            LogFile.Log("Charging status: " + ChargingStatus);
-                        }
+                        PhoneInfo Info = CurrentModel.ReadPhoneInfo(true);
+                        if (Info.FlashAppProtocolVersionMajor < 2)
+                            BootloaderDescription = "Lumia Bootloader Spec A";
                         else
-                        {
-                            ChargingStatus = "Unknown";
-                            LogFile.Log("Charging status: " + ChargingStatus);
-                        }
-
-                        LumiaFlashAppPhoneInfo Info = CurrentModel.ReadPhoneInfo(true);
-                        BootloaderDescription = Info.FlashAppProtocolVersionMajor < 2 ? "Lumia Bootloader Spec A" : "Lumia Bootloader Spec B";
-
+                            BootloaderDescription = "Lumia Bootloader Spec B";
                         LogFile.Log("Bootloader: " + BootloaderDescription);
 
-                        ProductCode = "";//TODO: FIXME: Info.ProductCode;
+                        ProductCode = Info.ProductCode;
                         LogFile.Log("ProductCode: " + ProductCode);
 
-                        ProductType = "";//TODO: FIXME: Info.Type;
+                        ProductType = Info.Type;
                         LogFile.Log("ProductType: " + ProductType);
-
-                        if (RootKeyHash == null)
-                        {
-                            LogFile.Log("Root Key Hash was null. Gathering information from an alternative source.");
-
-                            RootKeyHash = Info.RKH;
-
-                            if (RootKeyHash != null)
-                            {
-                                LogFile.Log("Root Key Hash: " + Converter.ConvertHexToString(RootKeyHash, " "));
-                            }
-                            else
-                            {
-                                RootKeyHash = new byte[32];
-                                LogFile.Log("Root Key Hash: " + Converter.ConvertHexToString(RootKeyHash, " "));
-                            }
-                        }
-
-                        if (PlatformName == null)
-                        {
-                            LogFile.Log("Platform Name was null. Gathering information from an alternative source.");
-
-                            PlatformName = Info.PlatformID;
-                            LogFile.Log("Platform Name: " + PlatformName);
-                        }
-
-                        if (SecurityStatus == null)
-                        {
-                            LogFile.Log("Security Status was null. Gathering information from an alternative source.");
-
-                            PlatformSecureBootStatus = Info.PlatformSecureBootEnabled;
-                            LogFile.Log("Platform Secure Boot Status: " + PlatformSecureBootStatus.ToString());
-                            UefiSecureBootStatus = Info.UefiSecureBootEnabled;
-                            LogFile.Log("Uefi Secure Boot Status: " + UefiSecureBootStatus.ToString());
-                            EffectiveSecureBootStatus = Info.PlatformSecureBootEnabled && Info.UefiSecureBootEnabled;
-                            LogFile.Log("Effective Secure Boot Status: " + EffectiveSecureBootStatus.ToString());
-
-                            BootloaderSecurityQfuseStatus = Info.SecureFfuEnabled;
-                            LogFile.Log("Bootloader Security Qfuse Status: " + BootloaderSecurityQfuseStatus.ToString());
-                            BootloaderSecurityAuthenticationStatus = Info.Authenticated;
-                            LogFile.Log("Bootloader Security Authentication Status: " + BootloaderSecurityAuthenticationStatus.ToString());
-                            BootloaderSecurityRdcStatus = Info.RdcPresent;
-                            LogFile.Log("Bootloader Security Rdc Status: " + BootloaderSecurityRdcStatus.ToString());
-                            EffectiveBootloaderSecurityStatus = !Info.IsBootloaderSecure;
-                            LogFile.Log("Effective Bootloader Security Status: " + EffectiveBootloaderSecurityStatus.ToString());
-
-                            NativeDebugStatus = !Info.JtagDisabled;
-                            LogFile.Log("Native Debug Status: " + NativeDebugStatus.ToString());
-                        }
                     }
                     catch
                     {
@@ -301,7 +205,7 @@ namespace WPinternals
             set
             {
                 _PublicID = value;
-                OnPropertyChanged(nameof(PublicID));
+                OnPropertyChanged("PublicID");
             }
         }
 
@@ -315,7 +219,7 @@ namespace WPinternals
             set
             {
                 _RootKeyHash = value;
-                OnPropertyChanged(nameof(RootKeyHash));
+                OnPropertyChanged("RootKeyHash");
             }
         }
 
@@ -329,7 +233,7 @@ namespace WPinternals
             set
             {
                 _PlatformName = value;
-                OnPropertyChanged(nameof(PlatformName));
+                OnPropertyChanged("PlatformName");
             }
         }
 
@@ -343,7 +247,7 @@ namespace WPinternals
             set
             {
                 _ProductType = value;
-                OnPropertyChanged(nameof(ProductType));
+                OnPropertyChanged("ProductType");
             }
         }
 
@@ -357,7 +261,7 @@ namespace WPinternals
             set
             {
                 _ProductCode = value;
-                OnPropertyChanged(nameof(ProductCode));
+                OnPropertyChanged("ProductCode");
             }
         }
 
@@ -371,7 +275,7 @@ namespace WPinternals
             set
             {
                 _eMMC = value;
-                OnPropertyChanged(nameof(eMMC));
+                OnPropertyChanged("eMMC");
             }
         }
 
@@ -385,21 +289,7 @@ namespace WPinternals
             set
             {
                 _BootloaderDescription = value;
-                OnPropertyChanged(nameof(BootloaderDescription));
-            }
-        }
-
-        private string _ChargingStatus = null;
-        public string ChargingStatus
-        {
-            get
-            {
-                return _ChargingStatus;
-            }
-            set
-            {
-                _ChargingStatus = value;
-                OnPropertyChanged(nameof(ChargingStatus));
+                OnPropertyChanged("BootloaderDescription");
             }
         }
 
@@ -413,7 +303,7 @@ namespace WPinternals
             set
             {
                 _SamsungWarningVisible = value;
-                OnPropertyChanged(nameof(SamsungWarningVisible));
+                OnPropertyChanged("SamsungWarningVisible");
             }
         }
 
@@ -427,7 +317,7 @@ namespace WPinternals
             set
             {
                 _PlatformSecureBootStatus = value;
-                OnPropertyChanged(nameof(PlatformSecureBootStatus));
+                OnPropertyChanged("PlatformSecureBootStatus");
             }
         }
 
@@ -441,7 +331,7 @@ namespace WPinternals
             set
             {
                 _BootloaderSecurityQfuseStatus = value;
-                OnPropertyChanged(nameof(BootloaderSecurityQfuseStatus));
+                OnPropertyChanged("BootloaderSecurityQfuseStatus");
             }
         }
 
@@ -455,7 +345,7 @@ namespace WPinternals
             set
             {
                 _BootloaderSecurityRdcStatus = value;
-                OnPropertyChanged(nameof(BootloaderSecurityRdcStatus));
+                OnPropertyChanged("BootloaderSecurityRdcStatus");
             }
         }
 
@@ -469,7 +359,7 @@ namespace WPinternals
             set
             {
                 _BootloaderSecurityAuthenticationStatus = value;
-                OnPropertyChanged(nameof(BootloaderSecurityAuthenticationStatus));
+                OnPropertyChanged("BootloaderSecurityAuthenticationStatus");
             }
         }
 
@@ -483,7 +373,7 @@ namespace WPinternals
             set
             {
                 _UefiSecureBootStatus = value;
-                OnPropertyChanged(nameof(UefiSecureBootStatus));
+                OnPropertyChanged("UefiSecureBootStatus");
             }
         }
 
@@ -497,7 +387,7 @@ namespace WPinternals
             set
             {
                 _EffectiveSecureBootStatus = value;
-                OnPropertyChanged(nameof(EffectiveSecureBootStatus));
+                OnPropertyChanged("EffectiveSecureBootStatus");
             }
         }
 
@@ -511,7 +401,7 @@ namespace WPinternals
             set
             {
                 _EffectiveBootloaderSecurityStatus = value;
-                OnPropertyChanged(nameof(EffectiveBootloaderSecurityStatus));
+                OnPropertyChanged("EffectiveBootloaderSecurityStatus");
             }
         }
 
@@ -525,221 +415,9 @@ namespace WPinternals
             set
             {
                 _NativeDebugStatus = value;
-                OnPropertyChanged(nameof(NativeDebugStatus));
+                OnPropertyChanged("NativeDebugStatus");
             }
         }
-
-        #region Final Config
-        private bool? _FinalConfigSecureBootStatus = null;
-        public bool? FinalConfigSecureBootStatus
-        {
-            get
-            {
-                return _FinalConfigSecureBootStatus;
-            }
-            set
-            {
-                _FinalConfigSecureBootStatus = value;
-                OnPropertyChanged(nameof(FinalConfigSecureBootStatus));
-            }
-        }
-
-        private bool? _FinalConfigFfuVerifyStatus = null;
-        public bool? FinalConfigFfuVerifyStatus
-        {
-            get
-            {
-                return _FinalConfigFfuVerifyStatus;
-            }
-            set
-            {
-                _FinalConfigFfuVerifyStatus = value;
-                OnPropertyChanged(nameof(FinalConfigFfuVerifyStatus));
-            }
-        }
-
-        private bool? _FinalConfigJtagStatus = null;
-        public bool? FinalConfigJtagStatus
-        {
-            get
-            {
-                return _FinalConfigJtagStatus;
-            }
-            set
-            {
-                _FinalConfigJtagStatus = value;
-                OnPropertyChanged(nameof(FinalConfigJtagStatus));
-            }
-        }
-
-        private bool? _FinalConfigShkStatus = null;
-        public bool? FinalConfigShkStatus
-        {
-            get
-            {
-                return _FinalConfigShkStatus;
-            }
-            set
-            {
-                _FinalConfigShkStatus = value;
-                OnPropertyChanged(nameof(FinalConfigShkStatus));
-            }
-        }
-
-        private bool? _FinalConfigSimlockStatus = null;
-        public bool? FinalConfigSimlockStatus
-        {
-            get
-            {
-                return _FinalConfigSimlockStatus;
-            }
-            set
-            {
-                _FinalConfigSimlockStatus = value;
-                OnPropertyChanged(nameof(FinalConfigSimlockStatus));
-            }
-        }
-
-        private bool? _FinalConfigProductionDoneStatus = null;
-        public bool? FinalConfigProductionDoneStatus
-        {
-            get
-            {
-                return _FinalConfigProductionDoneStatus;
-            }
-            set
-            {
-                _FinalConfigProductionDoneStatus = value;
-                OnPropertyChanged(nameof(FinalConfigProductionDoneStatus));
-            }
-        }
-
-        private bool? _FinalConfigRkhStatus = null;
-        public bool? FinalConfigRkhStatus
-        {
-            get
-            {
-                return _FinalConfigRkhStatus;
-            }
-            set
-            {
-                _FinalConfigRkhStatus = value;
-                OnPropertyChanged(nameof(FinalConfigRkhStatus));
-            }
-        }
-
-        private bool? _FinalConfigPublicIdStatus = null;
-        public bool? FinalConfigPublicIdStatus
-        {
-            get
-            {
-                return _FinalConfigPublicIdStatus;
-            }
-            set
-            {
-                _FinalConfigPublicIdStatus = value;
-                OnPropertyChanged(nameof(FinalConfigPublicIdStatus));
-            }
-        }
-
-        private bool? _FinalConfigDakStatus = null;
-        public bool? FinalConfigDakStatus
-        {
-            get
-            {
-                return _FinalConfigDakStatus;
-            }
-            set
-            {
-                _FinalConfigDakStatus = value;
-                OnPropertyChanged(nameof(FinalConfigDakStatus));
-            }
-        }
-
-        private bool? _FinalConfigSecGenStatus = null;
-        public bool? FinalConfigSecGenStatus
-        {
-            get
-            {
-                return _FinalConfigSecGenStatus;
-            }
-            set
-            {
-                _FinalConfigSecGenStatus = value;
-                OnPropertyChanged(nameof(FinalConfigSecGenStatus));
-            }
-        }
-
-        private bool? _FinalConfigOemIdStatus = null;
-        public bool? FinalConfigOemIdStatus
-        {
-            get
-            {
-                return _FinalConfigOemIdStatus;
-            }
-            set
-            {
-                _FinalConfigOemIdStatus = value;
-                OnPropertyChanged(nameof(FinalConfigOemIdStatus));
-            }
-        }
-
-        private bool? _FinalConfigFastBootStatus = null;
-        public bool? FinalConfigFastBootStatus
-        {
-            get
-            {
-                return _FinalConfigFastBootStatus;
-            }
-            set
-            {
-                _FinalConfigFastBootStatus = value;
-                OnPropertyChanged(nameof(FinalConfigFastBootStatus));
-            }
-        }
-
-        private bool? _FinalConfigSpdmSecModeStatus = null;
-        public bool? FinalConfigSpdmSecModeStatus
-        {
-            get
-            {
-                return _FinalConfigSpdmSecModeStatus;
-            }
-            set
-            {
-                _FinalConfigSpdmSecModeStatus = value;
-                OnPropertyChanged(nameof(FinalConfigSpdmSecModeStatus));
-            }
-        }
-
-        private bool? _FinalConfigRpmWdogStatus = null;
-        public bool? FinalConfigRpmWdogStatus
-        {
-            get
-            {
-                return _FinalConfigRpmWdogStatus;
-            }
-            set
-            {
-                _FinalConfigRpmWdogStatus = value;
-                OnPropertyChanged(nameof(FinalConfigRpmWdogStatus));
-            }
-        }
-
-        private bool? _FinalConfigSsmStatus = null;
-        public bool? FinalConfigSsmStatus
-        {
-            get
-            {
-                return _FinalConfigSsmStatus;
-            }
-            set
-            {
-                _FinalConfigSsmStatus = value;
-                OnPropertyChanged(nameof(FinalConfigSsmStatus));
-            }
-        }
-        #endregion
 
         internal void RebootTo(string Mode)
         {
@@ -747,9 +425,6 @@ namespace WPinternals
             {
                 case "Normal":
                     RequestModeSwitch(PhoneInterfaces.Lumia_Normal);
-                    break;
-                case "PhoneInfo":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_PhoneInfo);
                     break;
                 case "Label":
                     RequestModeSwitch(PhoneInterfaces.Lumia_Label);

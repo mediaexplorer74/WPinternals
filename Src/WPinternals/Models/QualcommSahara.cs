@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -19,160 +19,29 @@
 // DEALINGS IN THE SOFTWARE.
 
 using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace WPinternals
 {
+    internal enum SaharaMode: uint
+    {
+        ImageTransferPending = 0x00,
+        ImagetransferComplete = 0x01,
+        MemoryDebug = 0x02,
+        Command = 0x03
+    }
+
     internal delegate void ReadyHandler();
 
     internal class QualcommSahara
     {
-        private readonly QualcommSerial Serial;
+        private QualcommSerial Serial;
 
         public QualcommSahara(QualcommSerial Serial)
         {
             Serial.EncodeCommands = false;
             Serial.DecodeResponses = false;
             this.Serial = Serial;
-        }
-
-        private static byte[] BuildCommandPacket(QualcommSaharaCommand SaharaCommand, byte[] CommandBuffer = null)
-        {
-            UInt32 CommandID = (uint)SaharaCommand;
-            UInt32 CommandBufferLength = 0;
-            if (CommandBuffer != null)
-            {
-                CommandBufferLength = (UInt32)CommandBuffer.Length;
-            }
-            UInt32 Length = 0x8u + CommandBufferLength;
-
-            byte[] Packet = new byte[Length];
-            ByteOperations.WriteUInt32(Packet, 0x00, CommandID);
-            ByteOperations.WriteUInt32(Packet, 0x04, Length);
-
-            if (CommandBuffer != null && CommandBufferLength != 0)
-            {
-                Buffer.BlockCopy(CommandBuffer, 0, Packet, 0x08, CommandBuffer.Length);
-            }
-
-            return Packet;
-        }
-
-        private static byte[] BuildHelloResponsePacket(QualcommSaharaMode SaharaMode, UInt32 ProtocolVersion = 2, UInt32 SupportedVersion = 1, UInt32 MaxPacketLength = 0 /* 0: Status OK */)
-        {
-            UInt32 Mode = (uint)SaharaMode;
-
-            // Hello packet:
-            // xxxxxxxx = Protocol version
-            // xxxxxxxx = Supported version
-            // xxxxxxxx = Max packet length
-            // xxxxxxxx = Expected mode
-            // 6 dwords reserved space
-            byte[] Hello = new byte[0x28];
-            ByteOperations.WriteUInt32(Hello, 0x00, ProtocolVersion);
-            ByteOperations.WriteUInt32(Hello, 0x04, SupportedVersion);
-            ByteOperations.WriteUInt32(Hello, 0x08, MaxPacketLength);
-            ByteOperations.WriteUInt32(Hello, 0x0C, Mode);
-            ByteOperations.WriteUInt32(Hello, 0x10, 0);
-            ByteOperations.WriteUInt32(Hello, 0x14, 0);
-            ByteOperations.WriteUInt32(Hello, 0x18, 0);
-            ByteOperations.WriteUInt32(Hello, 0x1C, 0);
-            ByteOperations.WriteUInt32(Hello, 0x20, 0);
-            ByteOperations.WriteUInt32(Hello, 0x24, 0);
-
-            return BuildCommandPacket(QualcommSaharaCommand.HelloResponse, Hello);
-        }
-
-        private static byte[] BuildExecuteRequestPacket(UInt32 RequestID)
-        {
-            byte[] Execute = new byte[0x04];
-            ByteOperations.WriteUInt32(Execute, 0x00, RequestID);
-            return BuildCommandPacket(QualcommSaharaCommand.ExecuteRequest, Execute);
-        }
-
-        private static byte[] BuildExecuteDataPacket(UInt32 RequestID)
-        {
-            byte[] Execute = new byte[0x04];
-            ByteOperations.WriteUInt32(Execute, 0x00, RequestID);
-            return BuildCommandPacket(QualcommSaharaCommand.ExecuteData, Execute);
-        }
-
-        public byte[][] GetRKHs()
-        {
-            Serial.SendData(BuildExecuteRequestPacket(0x3));
-
-            byte[] ReadDataRequest = Serial.GetResponse(null);
-            UInt32 ResponseID = ByteOperations.ReadUInt32(ReadDataRequest, 0);
-
-            if (ResponseID != 0xE)
-            {
-                throw new BadConnectionException();
-            }
-
-            uint RKHLength = ByteOperations.ReadUInt32(ReadDataRequest, 0x0C);
-
-            Serial.SendData(BuildExecuteDataPacket(0x3));
-
-            byte[] Response = Serial.GetResponse(null, Length: (int)RKHLength);
-            
-            List<byte[]> RootKeyHashes = new();
-            for (int i = 0; i < RKHLength / 0x20; i++)
-            {
-                RootKeyHashes.Add(Response[(i * 0x20)..((i + 1) * 0x20)]);
-            }
-
-            return [.. RootKeyHashes];
-        }
-
-        public byte[] GetRKH()
-        {
-            int Step = 0;
-            UInt32 Offset = 0;
-            UInt32 Length = 0;
-
-            try
-            {
-                Step = 1;
-                byte[] Hello = Serial.GetResponse([0x01, 0x00, 0x00, 0x00]);
-
-                // Incoming Hello packet:
-                // 00000001 = Hello command id
-                // xxxxxxxx = Length
-                // xxxxxxxx = Protocol version
-                // xxxxxxxx = Supported version
-                // xxxxxxxx = Max packet length
-                // xxxxxxxx = Expected mode
-                // 6 dwords reserved space
-                LogFile.Log("Protocol: 0x" + ByteOperations.ReadUInt32(Hello, 0x08).ToString("X8"), LogType.FileOnly);
-                LogFile.Log("Supported: 0x" + ByteOperations.ReadUInt32(Hello, 0x0C).ToString("X8"), LogType.FileOnly);
-                LogFile.Log("MaxLength: 0x" + ByteOperations.ReadUInt32(Hello, 0x10).ToString("X8"), LogType.FileOnly);
-                LogFile.Log("Mode: 0x" + ByteOperations.ReadUInt32(Hello, 0x14).ToString("X8"), LogType.FileOnly);
-
-                Step = 2;
-                byte[] HelloResponse = BuildHelloResponsePacket(QualcommSaharaMode.Command);
-                Serial.SendData(HelloResponse);
-
-                Step = 3;
-                byte[] ReadDataRequest = Serial.GetResponse(null);
-                UInt32 ResponseID = ByteOperations.ReadUInt32(ReadDataRequest, 0);
-
-                if (ResponseID != 0xB)
-                {
-                    throw new BadConnectionException();
-                }
-
-                Step = 4;
-                byte[][] RKHs = GetRKHs();
-                return RKHs[0];
-            }
-            catch (Exception Ex)
-            {
-                LogFile.LogException(Ex, LogType.FileAndConsole, Step.ToString() + " 0x" + Offset.ToString("X8") + " 0x" + Length.ToString("X8"));
-            }
-
-            return null;
         }
 
         public bool SendImage(string Path)
@@ -189,7 +58,8 @@ namespace WPinternals
             try
             {
                 Step = 1;
-                byte[] Hello = Serial.GetResponse([0x01, 0x00, 0x00, 0x00]);
+                byte[] Hello = null;
+                Hello = Serial.GetResponse(new byte[] { 0x01, 0x00, 0x00, 0x00 });
 
                 // Incoming Hello packet:
                 // 00000001 = Hello command id
@@ -204,45 +74,51 @@ namespace WPinternals
                 LogFile.Log("MaxLength: 0x" + ByteOperations.ReadUInt32(Hello, 0x10).ToString("X8"), LogType.FileOnly);
                 LogFile.Log("Mode: 0x" + ByteOperations.ReadUInt32(Hello, 0x14).ToString("X8"), LogType.FileOnly);
 
+                // Packet:
+                // 00000002 = Hello response command id
+                // 00000030 = Length
+                // 00000002 = Protocol version
+                // 00000001 = Supported version
+                // 00000000 = Status OK
+                // 00000000 = Mode
+                // rest is reserved space
                 Step = 2;
-                byte[] HelloResponse = BuildHelloResponsePacket(QualcommSaharaMode.ImageTransferPending);
+                byte[] HelloResponse = new byte[] {
+                    0x02, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                };
                 Serial.SendData(HelloResponse);
 
                 Step = 3;
-                using FileStream FileStream = new(Path, FileMode.Open, FileAccess.Read);
-                while (true)
+                using (System.IO.FileStream FileStream = new System.IO.FileStream(Path, System.IO.FileMode.Open, System.IO.FileAccess.Read))
                 {
-                    Step = 4;
-                    byte[] ReadDataRequest = Serial.GetResponse(null);
-                    UInt32 ResponseID = ByteOperations.ReadUInt32(ReadDataRequest, 0);
-                    if (ResponseID == 4)
+                    while (true)
                     {
-                        break;
+                        Step = 4;
+                        byte[] ReadDataRequest = Serial.GetResponse(null);
+                        UInt32 ResponseID = ByteOperations.ReadUInt32(ReadDataRequest, 0);
+                        if (ResponseID == 4)
+                            break;
+                        if (ResponseID != 3)
+                        {
+                            Step = 5;
+                            throw new BadConnectionException();
+                        }
+
+                        Offset = ByteOperations.ReadUInt32(ReadDataRequest, 0x0C);
+                        Length = ByteOperations.ReadUInt32(ReadDataRequest, 0x10);
+                        if ((ImageBuffer == null) || (ImageBuffer.Length != Length))
+                            ImageBuffer = new byte[Length];
+                        if (FileStream.Position != Offset)
+                            FileStream.Seek(Offset, System.IO.SeekOrigin.Begin);
+
+                        Step = 6;
+                        FileStream.Read(ImageBuffer, 0, (int)Length);
+
+                        Step = 7;
+                        Serial.SendData(ImageBuffer);
                     }
-
-                    if (ResponseID != 3)
-                    {
-                        Step = 5;
-                        throw new BadConnectionException();
-                    }
-
-                    Offset = ByteOperations.ReadUInt32(ReadDataRequest, 0x0C);
-                    Length = ByteOperations.ReadUInt32(ReadDataRequest, 0x10);
-                    if ((ImageBuffer == null) || (ImageBuffer.Length != Length))
-                    {
-                        ImageBuffer = new byte[Length];
-                    }
-
-                    if (FileStream.Position != Offset)
-                    {
-                        FileStream.Seek(Offset, SeekOrigin.Begin);
-                    }
-
-                    Step = 6;
-                    FileStream.Read(ImageBuffer, 0, (int)Length);
-
-                    Step = 7;
-                    Serial.SendData(ImageBuffer);
                 }
             }
             catch (Exception Ex)
@@ -252,9 +128,7 @@ namespace WPinternals
             }
 
             if (Result)
-            {
                 LogFile.Log("Programmer loaded into phone memory", LogType.FileOnly);
-            }
 
             return Result;
         }
@@ -265,7 +139,7 @@ namespace WPinternals
 
             try
             {
-                byte[] Hello = Serial.GetResponse([0x01, 0x00, 0x00, 0x00]);
+                byte[] Hello = Serial.GetResponse(new byte[] { 0x01, 0x00, 0x00, 0x00 });
 
                 // Incoming Hello packet:
                 // 00000001 = Hello command id
@@ -280,9 +154,13 @@ namespace WPinternals
                 LogFile.Log("MaxLength: 0x" + ByteOperations.ReadUInt32(Hello, 0x10).ToString("X8"), LogType.FileOnly);
                 LogFile.Log("Mode: 0x" + ByteOperations.ReadUInt32(Hello, 0x14).ToString("X8"), LogType.FileOnly);
 
-                byte[] HelloResponse = BuildHelloResponsePacket(QualcommSaharaMode.ImageTransferPending);
+                byte[] HelloResponse = new byte[] { 
+                    0x02, 0x00, 0x00, 0x00, 0x30, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+                };
 
-                byte[] Ready = Serial.SendCommand(HelloResponse, [0x03, 0x00, 0x00, 0x00]);
+                byte[] Ready = Serial.SendCommand(HelloResponse, new byte[] { 0x03, 0x00, 0x00, 0x00 });
             }
             catch
             {
@@ -294,26 +172,131 @@ namespace WPinternals
 
         public void ResetSahara()
         {
-            Serial.SendCommand(BuildCommandPacket(QualcommSaharaCommand.ResetRequest), [0x08, 0x00, 0x00, 0x00]);
+            Serial.SendCommand(new byte[] { 0x07, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00 }, new byte[] { 0x08, 0x00, 0x00, 0x00 });
         }
 
-        public void SwitchMode(QualcommSaharaMode Mode)
+        public bool ConnectToProgrammerInTestMode()
         {
-            byte[] SwitchMode = new byte[0x04];
-            ByteOperations.WriteUInt32(SwitchMode, 0x00, (UInt32)Mode);
-            byte[] SwitchModeCommand = BuildCommandPacket(QualcommSaharaCommand.SwitchMode, SwitchMode);
+            // Behaviour of old firehose:
+            // Takes about 20 ms to be started.
+            // Then PC has to start talking to the phone.
+            // Behaviour of new firehose:
+            // After 2000 ms the firehose starts talking to the PC
+            //
+            // For the duration of 2.5 seconds we will send Hello packages
+            // And also wait for incoming messages
+            // An incoming message can be a response to our outgoing Hello packet (read incoming until "response value")
+            // Or it can be an incoming Hello-packet from the programmer (always 2 packets, starting with "Chip serial num")
+            // Sending the hello-packet can succeed immediately, or it can timeout.
+            // When sending succeeds, an answer should be incoming immediately to complete the handshake.
+            // When an incoming Hello was received, the phone still expects to receive another Hello.
 
+            byte[] HelloPacketFromPcToProgrammer = new byte[0x20C];
+            ByteOperations.WriteUInt32(HelloPacketFromPcToProgrammer, 0, 0x57503730);
+            ByteOperations.WriteUInt32(HelloPacketFromPcToProgrammer, 0x28, 0x57503730);
+            ByteOperations.WriteUInt32(HelloPacketFromPcToProgrammer, 0x208, 0x57503730);
+            ByteOperations.WriteUInt16(HelloPacketFromPcToProgrammer, 0x48, 0x4445);
+
+            int HelloSendCount = 0;
+            bool HandshakeCompleted = false;
+            string Incoming;
+            do
+            {
+                Serial.SetTimeOut(200);
+                HelloSendCount++;
+                try
+                {
+                    LogFile.Log("Send Hello to programmer (" + HelloSendCount.ToString() + ")", LogType.FileOnly);
+                    Serial.SendData(HelloPacketFromPcToProgrammer);
+                    LogFile.Log("Hello packet accepted", LogType.FileOnly);
+                }
+                catch
+                {
+                    LogFile.Log("Hello packet not accepted", LogType.FileOnly);
+                }
+
+                try
+                {
+                    Serial.SetTimeOut(500);
+                    Incoming = System.Text.Encoding.ASCII.GetString(Serial.GetResponse(null));
+                    LogFile.Log("In: " + Incoming, LogType.FileOnly);
+                    Serial.SetTimeOut(200);
+                    if (Incoming.Contains("Chip serial num"))
+                    {
+                        Incoming = System.Text.Encoding.ASCII.GetString(Serial.GetResponse(null));
+                        LogFile.Log("In: " + Incoming, LogType.FileOnly);
+                        LogFile.Log("Incoming Hello-packets received", LogType.FileOnly);
+                    }
+
+                    while (Incoming.IndexOf("response value") < 0)
+                    {
+                        Incoming = System.Text.Encoding.ASCII.GetString(Serial.GetResponse(null));
+                        LogFile.Log("In: " + Incoming, LogType.FileOnly);
+                    };
+                    
+                    LogFile.Log("Incoming Hello-response received", LogType.FileOnly);
+                    HandshakeCompleted = true;
+                }
+                catch { }
+            }
+            while (!HandshakeCompleted && (HelloSendCount < 6));
+
+            if (HandshakeCompleted)
+                LogFile.Log("Handshake completed with programmer in testmode", LogType.FileOnly);
+            else
+                LogFile.Log("Handshake with programmer failed", LogType.FileOnly);
+
+            return HandshakeCompleted;
+        }
+
+        public async Task<bool> Reset(string ProgrammerPath)
+        {
+            bool SendImageResult = await Task.Run(() => SendImage(ProgrammerPath));
+            if (!SendImageResult)
+                return false;
+
+            await Task.Run(() => StartProgrammer());
+
+            bool Connected = await Task.Run(() => ConnectToProgrammerInTestMode());
+            if (!Connected)
+                return false;
+
+            LogFile.Log("Rebooting phone", LogType.FileAndConsole);
+            string Command03 = "<?xml version=\"1.0\" ?><data><power value=\"reset\"/></data>";
+            LogFile.Log("Out: " + Command03, LogType.FileOnly);
+            Serial.SendData(System.Text.Encoding.ASCII.GetBytes(Command03));
+
+            string Incoming;
+            do
+            {
+                Incoming = System.Text.Encoding.ASCII.GetString(Serial.GetResponse(null));
+                LogFile.Log("In: " + Incoming, LogType.FileOnly);
+            }
+            while (Incoming.IndexOf("response value") < 0);
+
+            // Workaround for problem
+            // SerialPort is sometimes not disposed correctly when the device is already removed.
+            // So explicitly dispose here
+            Serial.Close();
+
+            return true;
+        }
+
+        public void SwitchMode(SaharaMode Mode)
+        {
+            byte[] SwitchModeCommand = new byte[] { 0x0C, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+            ByteOperations.WriteUInt32(SwitchModeCommand, 8, (UInt32)Mode);
             byte[] ResponsePattern = null;
             switch (Mode)
             {
-                case QualcommSaharaMode.ImageTransferPending:
-                    ResponsePattern = [0x04, 0x00, 0x00, 0x00];
+                case SaharaMode.ImageTransferPending:
+                    ResponsePattern = new byte[] { 0x04, 0x00, 0x00, 0x00 };
                     break;
-                case QualcommSaharaMode.MemoryDebug:
-                    ResponsePattern = [0x09, 0x00, 0x00, 0x00];
+                case SaharaMode.MemoryDebug:
+                    ResponsePattern = new byte[] { 0x09, 0x00, 0x00, 0x00 };
                     break;
-                case QualcommSaharaMode.Command:
-                    ResponsePattern = [0x0B, 0x00, 0x00, 0x00];
+                case SaharaMode.Command:
+                    ResponsePattern = new byte[] { 0x0B, 0x00, 0x00, 0x00 };
                     break;
             }
             Serial.SendCommand(SwitchModeCommand, ResponsePattern);
@@ -322,40 +305,9 @@ namespace WPinternals
         public void StartProgrammer()
         {
             LogFile.Log("Starting programmer", LogType.FileAndConsole);
-            byte[] DoneCommand = BuildCommandPacket(QualcommSaharaCommand.DoneRequest);
-            bool Started = false;
-            int count = 0;
-            do
-            {
-                count++;
-                try
-                {
-                    byte[] DoneResponse = Serial.SendCommand(DoneCommand, [0x06, 0x00, 0x00, 0x00]);
-                    Started = true;
-                }
-                catch (BadConnectionException)
-                {
-                    LogFile.Log("Problem while starting programmer. Attempting again.", LogType.FileAndConsole);
-                }
-            } while (!Started && count < 3);
-            if (count >= 3 && !Started)
-            {
-                LogFile.Log("Maximum number of attempts to start the programmer exceeded.", LogType.FileAndConsole);
-                throw new BadConnectionException();
-            }
+            byte[] DoneCommand = new byte[] { 0x05, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00 };
+            byte[] DoneResponse = Serial.SendCommand(DoneCommand, new byte[] { 0x06, 0x00, 0x00, 0x00 });
             LogFile.Log("Programmer being launched on phone", LogType.FileOnly);
-        }
-
-        public async Task<bool> LoadProgrammer(string ProgrammerPath)
-        {
-            bool SendImageResult = await Task.Run(() => SendImage(ProgrammerPath));
-            if (!SendImageResult)
-            {
-                return false;
-            }
-
-            await Task.Run(() => StartProgrammer());
-            return true;
         }
     }
 }

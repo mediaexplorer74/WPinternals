@@ -1,5 +1,5 @@
 ﻿<!--
-Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 
 Permission is hereby granted, free of charge, to any person obtaining a
 copy of this software and associated documentation files (the "Software"),
@@ -58,16 +58,6 @@ DEALINGS IN THE SOFTWARE.
                     <Run Text="This will switch back to Windows Phone OS." />
                     <LineBreak />
                     <LineBreak />
-                    <Hyperlink NavigateUri="PhoneInfo">Switch to Phone-Info-mode</Hyperlink>
-                    <LineBreak />
-                    <Run Text="This will switch to Phone Info Mode." />
-                    <LineBreak />
-                    <LineBreak />
-                    <Hyperlink NavigateUri="BootMgr">Switch to Boot-Manager-mode</Hyperlink>
-                    <LineBreak />
-                    <Run Text="This will switch to Boot Manager Mode." />
-                    <LineBreak />
-                    <LineBreak />
                     <Hyperlink NavigateUri="Label">Switch to Label-mode</Hyperlink>
                     <LineBreak />
                     <Run Text="This interface is meant for querying and provisioning the phone. This is normally used for configuring the phone during manufacturing." />
@@ -78,11 +68,6 @@ DEALINGS IN THE SOFTWARE.
                     <Run Text="This mode allows you to access the complete file-system of the phone. " />
                     <local:CollapsibleRun IsVisible="{Binding EffectiveBootloaderSecurityStatus, Mode=OneWay}" Text="Your security flags indicate that this mode is prohibited on this phone."/>
                     <local:CollapsibleRun IsVisible="{Binding EffectiveBootloaderSecurityStatus, Converter={StaticResource InverseConverter}, Mode=OneWay}" Text="Your security flags indicate the this mode can be accessed. But this switch will only succeed if you took all measures to unlock Mass Storage mode." />
-                    <LineBreak />
-                    <LineBreak />
-                    <Hyperlink NavigateUri="Shutdown">Shutdown the phone</Hyperlink>
-                    <LineBreak />
-                    <Run Text="This will shutdown your phone. After selecting this option, you'll need to unplug your phone from your computer." />
                     <LineBreak />
                     <LineBreak />
                     <Run Text="Warning 1: " Foreground="Red" FontWeight="Bold"/>

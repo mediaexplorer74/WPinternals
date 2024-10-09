@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -24,11 +24,11 @@ using System.Threading;
 
 namespace WPinternals
 {
-    internal class DumpRomViewModel : ContextViewModel
+    internal class DumpRomViewModel: ContextViewModel
     {
-        private readonly Action SwitchToUnlockBoot;
-        private readonly Action SwitchToUnlockRoot;
-        private readonly Action SwitchToFlashRom;
+        private Action SwitchToUnlockBoot;
+        private Action SwitchToUnlockRoot;
+        private Action SwitchToFlashRom;
 
         internal DumpRomViewModel(Action SwitchToUnlockBoot, Action SwitchToUnlockRoot, Action SwitchToFlashRom)
             : base()
@@ -41,14 +41,10 @@ namespace WPinternals
         internal override void EvaluateViewState()
         {
             if (!IsActive)
-            {
                 return;
-            }
 
             if (SubContextViewModel == null)
-            {
                 ActivateSubContext(new DumpRomTargetSelectionViewModel(SwitchToUnlockBoot, SwitchToUnlockRoot, SwitchToFlashRom, DoDumpRom));
-            }
         }
 
         internal void DoDumpRom(string FFUPath, string EFIESPPath, bool CompressEFIESP, string MainOSPath, bool CompressMainOS, string DataPath, bool CompressData)
@@ -60,7 +56,7 @@ namespace WPinternals
                     ActivateSubContext(new BusyViewModel("Initializing ROM dump..."));
 
                     ulong TotalSizeSectors = 0;
-                    int PartitionCount = 0;
+                    int PartitionCount = 0;    
                     Partition Partition;
                     FFU FFU = null;
                     try
@@ -69,21 +65,21 @@ namespace WPinternals
 
                         if (EFIESPPath != null)
                         {
-                            Partition = FFU.GPT.Partitions.First(p => p.Name == "EFIESP");
+                            Partition = FFU.GPT.Partitions.Where(p => p.Name == "EFIESP").First();
                             TotalSizeSectors += Partition.SizeInSectors;
                             PartitionCount++;
                         }
 
                         if (MainOSPath != null)
                         {
-                            Partition = FFU.GPT.Partitions.First(p => p.Name == "MainOS");
+                            Partition = FFU.GPT.Partitions.Where(p => p.Name == "MainOS").First();
                             TotalSizeSectors += Partition.SizeInSectors;
                             PartitionCount++;
                         }
 
                         if (DataPath != null)
                         {
-                            Partition = FFU.GPT.Partitions.First(p => p.Name == "Data");
+                            Partition = FFU.GPT.Partitions.Where(p => p.Name == "Data").First();
                             TotalSizeSectors += Partition.SizeInSectors;
                             PartitionCount++;
                         }
@@ -96,7 +92,7 @@ namespace WPinternals
 
                     // We are on a worker thread!
                     // So we must pass the SynchronizationContext of the UI thread
-                    BusyViewModel Busy = new("Dumping ROM...", MaxProgressValue: TotalSizeSectors, UIContext: UIContext);
+                    BusyViewModel Busy = new BusyViewModel("Dumping ROM...", MaxProgressValue: TotalSizeSectors, UIContext: UIContext);
                     ProgressUpdater Updater = Busy.ProgressUpdater;
                     ActivateSubContext(Busy);
 
@@ -108,7 +104,7 @@ namespace WPinternals
                             if (EFIESPPath != null)
                             {
                                 i++;
-                                Busy.Message = "Dumping partition EFIESP (" + i.ToString() + "/" + PartitionCount.ToString() + ")";
+                                Busy.Message = "Dumping partition EFIESP (" + i.ToString() + @"/" + PartitionCount.ToString() + ")";
                                 FFU.WritePartition("EFIESP", EFIESPPath, Updater, CompressEFIESP);
                             }
                         }
@@ -126,7 +122,7 @@ namespace WPinternals
                             if (MainOSPath != null)
                             {
                                 i++;
-                                Busy.Message = "Dumping partition MainOS (" + i.ToString() + "/" + PartitionCount.ToString() + ")";
+                                Busy.Message = "Dumping partition MainOS (" + i.ToString() + @"/" + PartitionCount.ToString() + ")";
                                 FFU.WritePartition("MainOS", MainOSPath, Updater, CompressMainOS);
                             }
                         }
@@ -144,7 +140,7 @@ namespace WPinternals
                             if (DataPath != null)
                             {
                                 i++;
-                                Busy.Message = "Dumping partition Data (" + i.ToString() + "/" + PartitionCount.ToString() + ")";
+                                Busy.Message = "Dumping partition Data (" + i.ToString() + @"/" + PartitionCount.ToString() + ")";
                                 FFU.WritePartition("Data", DataPath, Updater, CompressData);
                             }
                         }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -27,7 +27,7 @@ using System.Windows.Media;
 
 namespace WPinternals
 {
-    public class PathChangedEventArgs : EventArgs
+    public class PathChangedEventArgs: EventArgs
     {
         public PathChangedEventArgs(string NewPath)
             : base()
@@ -48,19 +48,17 @@ namespace WPinternals
     /// </summary>
     public partial class FilePickerBase : System.Windows.Controls.UserControl, INotifyPropertyChanged
     {
-        private readonly SynchronizationContext UIContext;
+        private SynchronizationContext UIContext;
 
         public event PropertyChangedEventHandler PropertyChanged = delegate { };
-        public event EventHandler<PathChangedEventArgs> PathChanged = delegate { };
+        public event PathChangedEventHandler PathChanged = delegate { };
 
         protected void OnPropertyChanged(string propertyName)
         {
             if (this.PropertyChanged != null)
             {
                 if (SynchronizationContext.Current == UIContext)
-                {
                     PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-                }
                 else
                 {
                     UIContext.Post((s) => PropertyChanged(this, new PropertyChangedEventArgs(propertyName)), null);
@@ -112,7 +110,7 @@ namespace WPinternals
             {
                 return (string)GetValue(PathProperty);
             }
-            set
+            set 
             {
                 if ((string)GetValue(PathProperty) != value)
                 {
@@ -151,27 +149,14 @@ namespace WPinternals
         {
             var resultSize = new Size(availableSize.Width, 0);
 
-#if NETCORE
             FormattedText formatted = new FormattedText(
                 "TEST",
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(PathTextBlock.FontFamily, PathTextBlock.FontStyle, PathTextBlock.FontWeight, PathTextBlock.FontStretch),
                 FontSize,
-                Foreground,
-                100 / 96
+                Foreground
             );
-#else
-            FormattedText formatted = new(
-                "TEST",
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface(PathTextBlock.FontFamily, PathTextBlock.FontStyle, PathTextBlock.FontWeight, PathTextBlock.FontStretch),
-                FontSize,
-                Foreground,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip
-            );
-#endif
 
             resultSize.Height = formatted.Height;
 
@@ -181,91 +166,52 @@ namespace WPinternals
         private void Resize()
         {
             if (!IsLoaded)
-            {
                 return;
-            }
 
             CaptionTextBlock.Text = Caption;
-#if NETCORE
             FormattedText formatted = new FormattedText(
                 CaptionTextBlock.Text,
                 CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight,
                 new Typeface(CaptionTextBlock.FontFamily, CaptionTextBlock.FontStyle, CaptionTextBlock.FontWeight, CaptionTextBlock.FontStretch),
                 FontSize,
-                Foreground,
-                100 / 96
+                Foreground
                 );
-#else
-            FormattedText formatted = new(
-                CaptionTextBlock.Text,
-                CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface(CaptionTextBlock.FontFamily, CaptionTextBlock.FontStyle, CaptionTextBlock.FontWeight, CaptionTextBlock.FontStretch),
-                FontSize,
-                Foreground,
-                VisualTreeHelper.GetDpi(this).PixelsPerDip
-                );
-#endif
             double CaptionWidth = formatted.Width;
             if (CaptionWidth > 0)
-            {
                 CaptionWidth += 10;
-            }
 
-            bool SelectVisible = Path == null;
-            bool ChangeVisible = Path != null;
-            bool ClearVisible = (Path != null) && AllowNull;
+            bool SelectVisible = (Path == null);
+            bool ChangeVisible = (Path != null);
+            bool ClearVisible = ((Path != null) && (AllowNull));
 
             double NewWidth = ActualWidth - CaptionWidth;
             if (SelectVisible)
-            {
                 NewWidth -= SelectLink.ActualWidth;
-            }
-
             if (ChangeVisible)
-            {
-                NewWidth -= ChangeLink.ActualWidth + 10;
-            }
-
+                NewWidth -= (ChangeLink.ActualWidth + 10);
             if (ClearVisible)
-            {
-                NewWidth -= ClearLink.ActualWidth + 10;
-            }
+                NewWidth -= (ClearLink.ActualWidth + 10);
 
             SetText(NewWidth);
 
             // Calculate the new ActualWidth
             // We can't use PathTextBlock.ActualWidth yet, because LayoutUpdated event has not yet been triggered
-#if NETCORE
             formatted = new FormattedText(
                         PathTextBlock.Text,
                         CultureInfo.CurrentCulture,
                         FlowDirection.LeftToRight,
                         new Typeface(PathTextBlock.FontFamily, PathTextBlock.FontStyle, PathTextBlock.FontWeight, PathTextBlock.FontStretch),
                         FontSize,
-                        Foreground,
-                        100 / 96
+                        Foreground
                         );
-#else
-            formatted = new FormattedText(
-                        PathTextBlock.Text,
-                        CultureInfo.CurrentCulture,
-                        FlowDirection.LeftToRight,
-                        new Typeface(PathTextBlock.FontFamily, PathTextBlock.FontStyle, PathTextBlock.FontWeight, PathTextBlock.FontStretch),
-                        FontSize,
-                        Foreground,
-                        VisualTreeHelper.GetDpi(this).PixelsPerDip
-                        );
-#endif
+
             if (NewWidth < 0)
-            {
                 PathTextBlock.Width = 0;
-            }
+            else if (formatted.Width > NewWidth)
+                PathTextBlock.Width = NewWidth;
             else
-            {
-                PathTextBlock.Width = formatted.Width > NewWidth ? NewWidth : formatted.Width;
-            }
+                PathTextBlock.Width = formatted.Width;
 
             PathTextBlock.Margin = new Thickness(CaptionWidth, 0, 0, 0);
             double Pos = PathTextBlock.Width + CaptionWidth;
@@ -277,9 +223,7 @@ namespace WPinternals
                 Pos += SelectLink.ActualWidth;
             }
             else
-            {
                 SelectLink.Visibility = Visibility.Collapsed;
-            }
 
             if (ChangeVisible)
             {
@@ -288,9 +232,7 @@ namespace WPinternals
                 Pos += ChangeLink.ActualWidth + 10;
             }
             else
-            {
                 ChangeLink.Visibility = Visibility.Collapsed;
-            }
 
             if (ClearVisible)
             {
@@ -299,9 +241,7 @@ namespace WPinternals
                 Pos += ClearLink.ActualWidth + 10;
             }
             else
-            {
                 ClearLink.Visibility = Visibility.Collapsed;
-            }
         }
 
         private void SetText(double MaxWidth)
@@ -316,46 +256,27 @@ namespace WPinternals
                 {
                     filename = System.IO.Path.GetFileName(Text);
                 }
-                catch (Exception ex)
-                {
-                    LogFile.LogException(ex, LogType.FileOnly);
-                }
+                catch { }
                 string directory = "";
                 try
                 {
                     directory = System.IO.Path.GetDirectoryName(Text);
                 }
-                catch (Exception ex)
-                {
-                    LogFile.LogException(ex, LogType.FileOnly);
-                }
+                catch { }
                 FormattedText formatted;
                 bool widthOK = false;
                 bool changedWidth = false;
 
                 do
                 {
-#if NETCORE
                     formatted = new FormattedText(
                         "{0}...\\{1}".FormatWith(directory, filename),
                         CultureInfo.CurrentCulture,
                         FlowDirection.LeftToRight,
                         new Typeface(PathTextBlock.FontFamily, PathTextBlock.FontStyle, PathTextBlock.FontWeight, PathTextBlock.FontStretch),
                         FontSize,
-                        Foreground,
-                        100 / 96
+                        Foreground
                         );
-#else
-                    formatted = new FormattedText(
-                        "{0}...\\{1}".FormatWith(directory, filename),
-                        CultureInfo.CurrentCulture,
-                        FlowDirection.LeftToRight,
-                        new Typeface(PathTextBlock.FontFamily, PathTextBlock.FontStyle, PathTextBlock.FontWeight, PathTextBlock.FontStretch),
-                        FontSize,
-                        Foreground,
-                        VisualTreeHelper.GetDpi(this).PixelsPerDip
-                        );
-#endif
 
                     widthOK = formatted.Width < MaxWidth;
 
@@ -364,9 +285,7 @@ namespace WPinternals
                         changedWidth = true;
 
                         if (directory.Length > 0)
-                        {
-                            directory = directory[0..^1];
-                        }
+                            directory = directory.Substring(0, directory.Length - 1);
 
                         if (directory.Length == 0)
                         {
@@ -417,21 +336,22 @@ namespace WPinternals
         public FilePicker()
             : base()
         {
-            if (SelectionText?.Length == 0)
-            {
+            if (SelectionText == "")
                 SelectionText = "Select file...";
-            }
         }
 
         protected override void Select()
         {
-            bool? result;
+            Nullable<bool> result;
 
             if (SaveDialog)
             {
-                Microsoft.Win32.SaveFileDialog savedlg = new();
+                Microsoft.Win32.SaveFileDialog savedlg = new Microsoft.Win32.SaveFileDialog();
 
-                savedlg.FileName = Path ?? DefaultFileName;
+                if (Path != null)
+                    savedlg.FileName = Path;
+                else
+                    savedlg.FileName = DefaultFileName;
 
                 // Show open file dialog box
                 result = savedlg.ShowDialog();
@@ -446,9 +366,12 @@ namespace WPinternals
             else
             {
                 // Select file
-                Microsoft.Win32.OpenFileDialog dlg = new();
+                Microsoft.Win32.OpenFileDialog dlg = new Microsoft.Win32.OpenFileDialog();
 
-                dlg.FileName = Path ?? DefaultFileName;
+                if (Path != null)
+                    dlg.FileName = Path;
+                else
+                    dlg.FileName = DefaultFileName;
 
                 // Show open file dialog box
                 result = dlg.ShowDialog();
@@ -498,30 +421,24 @@ namespace WPinternals
         public FolderPicker()
             : base()
         {
-            if (SelectionText?.Length == 0)
-            {
+            if (SelectionText == "")
                 SelectionText = "Select folder...";
-            }
         }
 
         protected override void Select()
         {
             // Select folder
 
-            FolderSelectDialog dlg = new();
+            FolderSelectDialog dlg = new FolderSelectDialog();
             if (Path != null)
-            {
                 dlg.InitialDirectory = Path;
-            }
 
             if (dlg.ShowDialog())
-            {
                 Path = dlg.FileName;
-            }
         }
     }
 
-    internal static class Extensions
+    static class Extensions
     {
         public static string FormatWith(this string s, params object[] args)
         {

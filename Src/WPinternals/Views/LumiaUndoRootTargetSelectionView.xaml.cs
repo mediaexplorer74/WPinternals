@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -36,15 +36,17 @@ namespace WPinternals
 
         private void HandleHyperlinkClick(object sender, RoutedEventArgs args)
         {
-            if (args.Source is Hyperlink link && link.NavigateUri.ToString() == "UnlockBoot")
+            Hyperlink link = args.Source as Hyperlink;
+            if (link != null)
             {
-                ((LumiaUndoRootTargetSelectionViewModel)DataContext).SwitchToUnlockBoot();
+                if (link.NavigateUri.ToString() == "UnlockBoot")
+                    ((LumiaUndoRootTargetSelectionViewModel)DataContext).SwitchToUnlockBoot();
             }
         }
 
         private void Document_Loaded(object sender, RoutedEventArgs e)
         {
-            (sender as FlowDocument)?.AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(HandleHyperlinkClick));
+            (sender as FlowDocument).AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(HandleHyperlinkClick));
         }
     }
 }

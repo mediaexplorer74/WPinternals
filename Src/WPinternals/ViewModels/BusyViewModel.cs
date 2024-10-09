@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -25,20 +25,22 @@ namespace WPinternals
 {
     internal class BusyViewModel : ContextViewModel
     {
-        private readonly ulong MaxProgressValue = 0;
+        private ulong MaxProgressValue = 0;
         internal ProgressUpdater ProgressUpdater = null;
 
         // UIContext can be passed to BusyViewModel, when it needs to update progress-controls and it is created on a worker-thread.
-        internal BusyViewModel(string Message, string SubMessage = null, ulong? MaxProgressValue = null, SynchronizationContext UIContext = null, bool ShowAnimation = true, bool ShowRebootHelp = false)
+        internal BusyViewModel(string Message, string SubMessage = null, ulong? MaxProgressValue = null, SynchronizationContext UIContext = null, bool ShowAnimation = true)
         {
             LogFile.Log(Message);
 
-            this.UIContext = UIContext ?? SynchronizationContext.Current;
+            if (UIContext == null)
+                this.UIContext = SynchronizationContext.Current;
+            else
+                this.UIContext = UIContext;
 
             this.Message = Message;
             this.SubMessage = SubMessage;
             this.ShowAnimation = ShowAnimation;
-            this.ShowRebootHelp = ShowRebootHelp;
             if (MaxProgressValue != null)
             {
                 ProgressPercentage = 0;
@@ -62,17 +64,10 @@ namespace WPinternals
             }
         }
 
-        internal void SetShowRebootHelp(bool Value)
-        {
-            ShowRebootHelp = Value;
-        }
-
         internal void SetProgress(ulong Value)
         {
             if (ProgressUpdater != null)
-            {
-                UIContext.Post((s) => ProgressUpdater.SetProgress(Value), null);
-            }
+                UIContext.Post((s) => { ProgressUpdater.SetProgress(Value); }, null);
         }
 
         private string _Message = null;
@@ -85,7 +80,7 @@ namespace WPinternals
             set
             {
                 _Message = value;
-                OnPropertyChanged(nameof(Message));
+                OnPropertyChanged("Message");
             }
         }
 
@@ -99,11 +94,11 @@ namespace WPinternals
             set
             {
                 _SubMessage = value;
-                OnPropertyChanged(nameof(SubMessage));
+                OnPropertyChanged("SubMessage");
             }
         }
 
-        private int? _ProgressPercentage = null;
+        private int? _ProgressPercentage = 0;//null;
         public int? ProgressPercentage
         {
             get
@@ -115,8 +110,8 @@ namespace WPinternals
                 if (_ProgressPercentage != value)
                 {
                     _ProgressPercentage = value;
-                    OnPropertyChanged(nameof(ProgressPercentage));
-                    OnPropertyChanged(nameof(ShowAnimation));
+                    OnPropertyChanged("ProgressPercentage");
+                    OnPropertyChanged("ShowAnimation");
                     UpdateProgressText();
                 }
             }
@@ -134,7 +129,7 @@ namespace WPinternals
                 if (_TimeRemaining != value)
                 {
                     _TimeRemaining = value;
-                    OnPropertyChanged(nameof(TimeRemaining));
+                    OnPropertyChanged("TimeRemaining");
                     UpdateProgressText();
                 }
             }
@@ -147,16 +142,12 @@ namespace WPinternals
             {
                 NewText = "Progress: " + ((int)ProgressPercentage).ToString() + "%";
             }
-            if (TimeRemaining != null)
+            if  (TimeRemaining != null)
             {
                 if (NewText == null)
-                {
                     NewText = "";
-                }
                 else
-                {
                     NewText += " - ";
-                }
 
                 NewText += "Estimated time remaining: " + ((TimeSpan)TimeRemaining).ToString(@"h\:mm\:ss");
             }
@@ -175,7 +166,7 @@ namespace WPinternals
                 if (_ProgressText != value)
                 {
                     _ProgressText = value;
-                    OnPropertyChanged(nameof(ProgressText));
+                    OnPropertyChanged("ProgressText");
                 }
             }
         }
@@ -192,26 +183,10 @@ namespace WPinternals
                 if (_ShowAnimation != value)
                 {
                     _ShowAnimation = value;
-                    OnPropertyChanged(nameof(ShowAnimation));
+                    OnPropertyChanged("ShowAnimation");
                 }
             }
         }
 
-        private bool _ShowRebootHelp = false;
-        public bool ShowRebootHelp
-        {
-            get
-            {
-                return _ShowRebootHelp;
-            }
-            set
-            {
-                if (_ShowRebootHelp != value)
-                {
-                    _ShowRebootHelp = value;
-                    OnPropertyChanged(nameof(ShowRebootHelp));
-                }
-            }
-        }
     }
 }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -18,69 +18,46 @@
 // FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 // DEALINGS IN THE SOFTWARE.
 
-using System;
+using System.Collections.Generic;
 
 namespace WPinternals
 {
     internal class NokiaModeMassStorageViewModel : ContextViewModel
     {
-        private readonly MassStorage CurrentModel;
-        private readonly Action<PhoneInterfaces?> RequestModeSwitch;
+        private NokiaPhoneModel CurrentModel;
 
-        internal NokiaModeMassStorageViewModel(NokiaPhoneModel CurrentModel, Action<PhoneInterfaces?> RequestModeSwitch)
+        internal NokiaModeMassStorageViewModel(NokiaPhoneModel CurrentModel)
             : base()
         {
-            this.CurrentModel = (MassStorage)CurrentModel;
-            this.RequestModeSwitch = RequestModeSwitch;
+            this.CurrentModel = CurrentModel;
         }
 
-        private bool _SupportsReboot = false;
-        public bool SupportsReboot
+        internal void RebootTo(string Mode)
         {
-            get
-            {
-                return _SupportsReboot;
-            }
-            set
-            {
-                _SupportsReboot = value;
-                OnPropertyChanged(nameof(SupportsReboot));
-            }
-        }
+            string DeviceMode;
 
-        internal override void EvaluateViewState()
-        {
-            if (IsActive)
-            {
-                SupportsReboot = CurrentModel.DoesDeviceSupportReboot();
-            }
-        }
-
-        public void RebootTo(string Mode)
-        {
             switch (Mode)
             {
-                case "Normal":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_Normal);
-                    break;
-                case "PhoneInfo":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_PhoneInfo);
-                    break;
-                case "BootMgr":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_Bootloader);
+                case "Flash":
+                    DeviceMode = "Flash";
+                    LogFile.Log("Reboot to Flash");
                     break;
                 case "Label":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_Label);
+                    DeviceMode = "Test";
+                    LogFile.Log("Reboot to Label");
                     break;
-                case "Flash":
-                    RequestModeSwitch(PhoneInterfaces.Lumia_Flash);
-                    break;
-                case "Shutdown":
-                    RequestModeSwitch(null);
+                case "MassStorage":
+                    DeviceMode = "Flash"; // TODO: implement folow-up
+                    LogFile.Log("Reboot to Mass Storage");
                     break;
                 default:
                     return;
             }
+
+            Dictionary<string, object> Params = new Dictionary<string, object>();
+            Params.Add("DeviceMode", DeviceMode);
+            Params.Add("ResetMethod", "HwReset");
+            CurrentModel.ExecuteJsonMethodAsync("SetDeviceMode", Params);
         }
     }
 }

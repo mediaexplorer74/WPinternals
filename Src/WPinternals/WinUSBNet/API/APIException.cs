@@ -6,8 +6,12 @@
  */
 
 using System;
-using System.ComponentModel;
+using System.Collections.Generic;
+using System.Text;
+using System.Runtime;
 using System.Runtime.InteropServices;
+using System.ComponentModel;
+
 
 namespace MadWizard.WinUSBNet.API
 {
@@ -20,18 +24,15 @@ namespace MadWizard.WinUSBNet.API
         public APIException(string message) :
             base(message)
         {
+            
         }
         public APIException(string message, Exception innerException) : base(message, innerException)
         {
         }
 
-        public APIException() : base()
-        {
-        }
-
         public static APIException Win32(string message)
         {
-            return Win32(message, Marshal.GetLastWin32Error());
+            return APIException.Win32(message, Marshal.GetLastWin32Error());
 
             // TEST!!
             // int ErrorCode = Marshal.GetLastWin32Error();
@@ -39,10 +40,12 @@ namespace MadWizard.WinUSBNet.API
             //     ErrorCode = ErrorCode; // Break here
             // return APIException.Win32(message, ErrorCode);
         }
-
-        public static APIException Win32(string message, int errorCode)
+        
+        public static APIException Win32(string message, int errorCode) 
         {
             return new APIException(message, new Win32Exception(errorCode));
+            
         }
+
     }
 }

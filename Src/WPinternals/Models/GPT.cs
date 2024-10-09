@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -31,18 +31,18 @@ namespace WPinternals
     public class GPT
     {
         private byte[] GPTBuffer;
-        private readonly UInt32 HeaderOffset;
-        private readonly UInt32 HeaderSize;
+        private UInt32 HeaderOffset;
+        private UInt32 HeaderSize;
         private UInt32 TableOffset;
         private UInt32 TableSize;
-        private readonly UInt32 PartitionEntrySize;
-        private readonly UInt32 MaxPartitions;
+        private UInt32 PartitionEntrySize;
+        private UInt32 MaxPartitions;
         internal UInt64 FirstUsableSector;
         internal UInt64 LastUsableSector;
         internal bool HasChanged = false;
 
         [XmlElement("Partition")]
-        public List<Partition> Partitions = new();
+        public List<Partition> Partitions = new List<Partition>();
 
         public GPT() // Only for serialization
         {
@@ -53,10 +53,7 @@ namespace WPinternals
             this.GPTBuffer = GPTBuffer;
             UInt32? TempHeaderOffset = ByteOperations.FindAscii(GPTBuffer, "EFI PART");
             if (TempHeaderOffset == null)
-            {
-                throw new WPinternalsException("Bad GPT", "The GPT read isn't valid. Couldn't find the text \"EFI PART\".");
-            }
-
+                throw new WPinternalsException("Bad GPT");
             HeaderOffset = (UInt32)TempHeaderOffset;
             HeaderSize = ByteOperations.ReadUInt32(GPTBuffer, HeaderOffset + 0x0C);
             TableOffset = HeaderOffset + 0x200;
@@ -66,21 +63,16 @@ namespace WPinternals
             PartitionEntrySize = ByteOperations.ReadUInt32(GPTBuffer, HeaderOffset + 0x54);
             TableSize = MaxPartitions * PartitionEntrySize;
             if ((TableOffset + TableSize) > GPTBuffer.Length)
-            {
-                throw new WPinternalsException("Bad GPT", "The GPT read isn't valid. The sizes defined in the GPT header exceed the provided GPT size.");
-            }
+                throw new WPinternalsException("Bad GPT");
 
             UInt32 PartitionOffset = TableOffset;
 
             while (PartitionOffset < (TableOffset + TableSize))
             {
-                string Name = ByteOperations.ReadUnicodeString(GPTBuffer, PartitionOffset + 0x38, 0x48).TrimEnd([(char)0, ' ']);
+                string Name = ByteOperations.ReadUnicodeString(GPTBuffer, PartitionOffset + 0x38, 0x48).TrimEnd(new char[] { (char)0, ' ' });
                 if (Name.Length == 0)
-                {
                     break;
-                }
-
-                Partition CurrentPartition = new();
+                Partition CurrentPartition = new Partition();
                 CurrentPartition.Name = Name;
                 CurrentPartition.FirstSector = ByteOperations.ReadUInt64(GPTBuffer, PartitionOffset + 0x20);
                 CurrentPartition.LastSector = ByteOperations.ReadUInt64(GPTBuffer, PartitionOffset + 0x28);
@@ -96,34 +88,30 @@ namespace WPinternals
 
         internal Partition GetPartition(string Name)
         {
-            return Partitions.Find(p => string.Equals(p.Name, Name, StringComparison.CurrentCultureIgnoreCase));
+            return Partitions.Where(p => (string.Compare(p.Name, Name, true) == 0)).FirstOrDefault();
         }
 
         // Magic!
         // SecureBoot hack for Bootloader Spec A starts here
         internal byte[] InsertHack()
         {
-            Partition HackPartition = Partitions.Find(p => p.Name == "HACK");
-            Partition SBL1 = Partitions.Find(p => p.Name == "SBL1");
-            Partition SBL2 = Partitions.Find(p => p.Name == "SBL2");
+            Partition HackPartition = Partitions.Where(p => (p.Name == "HACK")).FirstOrDefault();
+            Partition SBL1 = Partitions.Where(p => (p.Name == "SBL1")).FirstOrDefault();
+            Partition SBL2 = Partitions.Where(p => (p.Name == "SBL2")).FirstOrDefault();
 
             if ((SBL1 == null) || (SBL2 == null))
-            {
-                throw new WPinternalsException("Bad GPT", "Can't patch GPT for the Secure Boot hack for Spec A devices. The provided GPT does not include a SBL1 and/or SBL2 partition.");
-            }
+                throw new WPinternalsException("Bad GPT");
 
             if (HackPartition == null)
             {
-                HackPartition = new Partition
-                {
-                    Name = "HACK",
-                    Attributes = SBL2.Attributes,
-                    FirstSector = SBL1.LastSector,
-                    LastSector = SBL1.LastSector,
+                HackPartition = new Partition();
+                HackPartition.Name = "HACK";
+                HackPartition.Attributes = SBL2.Attributes;
+                HackPartition.FirstSector = SBL1.LastSector;
+                HackPartition.LastSector = SBL1.LastSector;
 
-                    PartitionTypeGuid = SBL2.PartitionTypeGuid,
-                    PartitionGuid = SBL2.PartitionGuid
-                };
+                HackPartition.PartitionTypeGuid = SBL2.PartitionTypeGuid;
+                HackPartition.PartitionGuid = SBL2.PartitionGuid;
 
                 Partitions.Add(HackPartition);
 
@@ -140,14 +128,12 @@ namespace WPinternals
 
         internal byte[] RemoveHack()
         {
-            Partition HackPartition = Partitions.Find(p => p.Name == "HACK");
-            Partition SBL1 = Partitions.Find(p => p.Name == "SBL1");
-            Partition SBL2 = Partitions.Find(p => p.Name == "SBL2");
+            Partition HackPartition = Partitions.Where(p => (p.Name == "HACK")).FirstOrDefault();
+            Partition SBL1 = Partitions.Where(p => (p.Name == "SBL1")).FirstOrDefault();
+            Partition SBL2 = Partitions.Where(p => (p.Name == "SBL2")).FirstOrDefault();
 
             if ((SBL1 == null) || (SBL2 == null))
-            {
-                throw new WPinternalsException("Bad GPT", "Can't un-patch GPT for the Secure Boot hack for Spec A devices. The provided GPT does not include a SBL1 and/or SBL2 partition.");
-            }
+                throw new WPinternalsException("Bad GPT");
 
             if (HackPartition != null)
             {
@@ -173,9 +159,7 @@ namespace WPinternals
                 GPTBuffer = new byte[TableSize];
             }
             else
-            {
                 Array.Clear(GPTBuffer, (int)TableOffset, (int)TableSize);
-            }
 
             UInt32 PartitionOffset = TableOffset;
             foreach (Partition CurrentPartition in Partitions)
@@ -204,21 +188,21 @@ namespace WPinternals
 
         internal void MergePartitionsFromStream(Stream Partitions, bool RoundToChunks)
         {
-            using TextReader tr = new StreamReader(Partitions);
-            MergePartitions(tr.ReadToEnd(), RoundToChunks);
+            using (TextReader tr = new StreamReader(Partitions))
+            {
+                MergePartitions(tr.ReadToEnd(), RoundToChunks);
+            }
         }
 
         internal void MergePartitions(string Xml, bool RoundToChunks, ZipArchive Archive = null)
         {
             GPT GptToMerge;
             if (Xml == null)
-            {
                 GptToMerge = new GPT();
-            }
             else
             {
-                XmlSerializer x = new(typeof(GPT), "");
-                MemoryStream s = new(System.Text.Encoding.ASCII.GetBytes(Xml));
+                XmlSerializer x = new XmlSerializer(typeof(GPT), "");
+                MemoryStream s = new MemoryStream(System.Text.Encoding.ASCII.GetBytes(Xml));
                 GptToMerge = (GPT)x.Deserialize(s);
                 s.Dispose();
             }
@@ -227,7 +211,7 @@ namespace WPinternals
             {
                 foreach (Partition NewPartition in GptToMerge.Partitions)
                 {
-                    ZipArchiveEntry Entry = Archive.Entries.FirstOrDefault(e => string.Equals(e.Name, NewPartition.Name, StringComparison.CurrentCultureIgnoreCase) || e.Name.StartsWith(NewPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                    ZipArchiveEntry Entry = Archive.Entries.Where(e => ((string.Compare(e.Name, NewPartition.Name, true) == 0) || (e.Name.StartsWith(NewPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US"))))).FirstOrDefault();
                     if (Entry == null)
                     {
                         // There is a partition entry in the xml, but this partition is not present in the archive.
@@ -240,7 +224,7 @@ namespace WPinternals
 
                             if (NewPartition.LastSector == 0)
                             {
-                                throw new WPinternalsException("Unknown length for partition \"" + NewPartition.Name + "\". The last sector property is set to 0 and the partition doesn't exist on the device currently.");
+                                throw new WPinternalsException("Unknown length for partition \"" + NewPartition.Name + "\"");
                             }
                         }
                         else
@@ -250,14 +234,9 @@ namespace WPinternals
                             // If the location of the new partition is specified, it must be the same as the current partition.
 
                             if ((NewPartition.FirstSector != 0) && (NewPartition.FirstSector != OldPartition.FirstSector))
-                            {
-                                throw new WPinternalsException("Incorrect location for partition \"" + NewPartition.Name + "\". A partition defined in the xml file got its boundaries updated, but as the partition isn't provided in the archive, it is not possible to relocate it.");
-                            }
-
+                                throw new WPinternalsException("Incorrect location for partition \"" + NewPartition.Name + "\"");
                             if ((NewPartition.LastSector != 0) && (NewPartition.LastSector != OldPartition.LastSector))
-                            {
-                                throw new WPinternalsException("Incorrect length for partition \"" + NewPartition.Name + "\". A partition defined in the xml file got its boundaries updated, but as the partition isn't provided in the archive, it is not possible to relocate it.");
-                            }
+                                throw new WPinternalsException("Incorrect length for partition \"" + NewPartition.Name + "\"");
 
                             NewPartition.FirstSector = OldPartition.FirstSector;
                             NewPartition.LastSector = OldPartition.LastSector;
@@ -269,16 +248,13 @@ namespace WPinternals
                         // If the length is specified in the xml, it must match the file in the archive.
 
                         ulong StreamLengthInSectors = (ulong)Entry.Length / 0x200;
-                        using (DecompressedStream DecompressedStream = new(Entry.Open()))
+                        using (DecompressedStream DecompressedStream = new DecompressedStream(Entry.Open()))
                         {
                             try
                             {
                                 StreamLengthInSectors = (ulong)DecompressedStream.Length / 0x200;
                             }
-                            catch (Exception ex)
-                            {
-                                LogFile.LogException(ex, LogType.FileOnly);
-                            }
+                            catch { }
                         }
 
                         if (NewPartition.LastSector == 0)
@@ -288,9 +264,7 @@ namespace WPinternals
                         else
                         {
                             if (NewPartition.SizeInSectors != StreamLengthInSectors)
-                            {
-                                throw new WPinternalsException("Inconsistent length specified for partition \"" + NewPartition.Name + "\". The provided partition in the archive does not match the length specified in the xml file.");
-                            }
+                                throw new WPinternalsException("Inconsistent length specified for partition \"" + NewPartition.Name + "\"");
                         }
                     }
                 }
@@ -309,7 +283,7 @@ namespace WPinternals
 
                         if (NewPartition.LastSector == 0)
                         {
-                            throw new WPinternalsException("Unknown length for partition \"" + NewPartition.Name + "\". The last sector property is set to 0 and the partition doesn't exist on the device currently.");
+                            throw new WPinternalsException("Unknown length for partition \"" + NewPartition.Name + "\"");
                         }
                     }
                     else
@@ -319,14 +293,9 @@ namespace WPinternals
                         // If the location of the new partition is specified, it must be the same as the current partition.
 
                         if ((NewPartition.FirstSector != 0) && (NewPartition.FirstSector != OldPartition.FirstSector))
-                        {
-                            throw new WPinternalsException("Incorrect location for partition \"" + NewPartition.Name + "\". A partition defined in the xml file got its boundaries updated, but as the partition isn't provided in the archive, it is not possible to relocate it.");
-                        }
-
+                            throw new WPinternalsException("Incorrect location for partition \"" + NewPartition.Name + "\"");
                         if ((NewPartition.LastSector != 0) && (NewPartition.LastSector != OldPartition.LastSector))
-                        {
-                            throw new WPinternalsException("Incorrect length for partition \"" + NewPartition.Name + "\". A partition defined in the xml file got its boundaries updated, but as the partition isn't provided in the archive, it is not possible to relocate it.");
-                        }
+                            throw new WPinternalsException("Incorrect length for partition \"" + NewPartition.Name + "\"");
 
                         NewPartition.FirstSector = OldPartition.FirstSector;
                         NewPartition.LastSector = OldPartition.LastSector;
@@ -334,7 +303,7 @@ namespace WPinternals
                 }
             }
 
-            List<Partition> DynamicPartitions = new();
+            List<Partition> DynamicPartitions = new List<Partition>();
             if (Archive != null)
             {
                 // Partitions which are present in the archive, and which have no start-sector in the new GPT data (dynamic relocation),
@@ -345,7 +314,7 @@ namespace WPinternals
                     Partition OldPartition = SortedPartitions.ElementAt(i);
 
                     // Present in archive?
-                    ZipArchiveEntry Entry = Archive.Entries.FirstOrDefault(e => string.Equals(e.Name, OldPartition.Name, StringComparison.CurrentCultureIgnoreCase) || e.Name.StartsWith(OldPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                    ZipArchiveEntry Entry = Archive.Entries.Where(e => ((string.Compare(e.Name, OldPartition.Name, true) == 0) || (e.Name.StartsWith(OldPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US"))))).FirstOrDefault();
                     if (Entry != null)
                     {
                         // Not present in new GPT or present in GPT without FirstSector?
@@ -356,14 +325,10 @@ namespace WPinternals
                             this.Partitions.Remove(OldPartition);
                         }
                         else
-                        {
                             break;
-                        }
                     }
                     else
-                    {
                         break;
-                    }
                 }
             }
 
@@ -374,31 +339,22 @@ namespace WPinternals
             UInt64 LowestSector = 0;
             Partition DPP = this.GetPartition("DPP");
             if (DPP != null)
-            {
                 LowestSector = DPP.LastSector + 1;
-            }
-
             foreach (Partition NewPartition in GptToMerge.Partitions)
             {
                 // If the new partition is a dynamic partition, then skip it here. It will be added later.
-                if (DynamicPartitions.Select(p => p.Name).Any(n => string.Equals(n, NewPartition.Name, StringComparison.CurrentCultureIgnoreCase)))
-                {
+                if (DynamicPartitions.Select(p => p.Name).Any(n => string.Compare(n, NewPartition.Name, true) == 0))
                     continue;
-                }
 
                 // Sanity check
                 if (NewPartition.FirstSector < LowestSector)
-                {
-                    throw new WPinternalsException("Bad sector alignment for partition: " + NewPartition.Name + ". The partition is located before DPP.");
-                }
+                    throw new WPinternalsException("Bad sector alignment for partition: " + NewPartition.Name);
 
                 Partition CurrentPartition = this.GetPartition(NewPartition.Name);
                 if (CurrentPartition == null)
                 {
-                    CurrentPartition = new Partition
-                    {
-                        Name = NewPartition.Name
-                    };
+                    CurrentPartition = new Partition();
+                    CurrentPartition.Name = NewPartition.Name;
                     this.Partitions.Add(CurrentPartition);
                     HasChanged = true;
                 }
@@ -419,42 +375,29 @@ namespace WPinternals
                     HasChanged = true;
                 }
 
-                if ((NewPartition.PartitionGuid != Guid.Empty) || (NewPartition.PartitionGuid != CurrentPartition.PartitionGuid))
-                {
+                if ((NewPartition.PartitionGuid == null) || (NewPartition.PartitionGuid != CurrentPartition.PartitionGuid))
                     HasChanged = true;
-                }
-
-                if (NewPartition.PartitionGuid != Guid.Empty)
-                {
+                if (NewPartition.PartitionGuid != null)
                     CurrentPartition.PartitionGuid = NewPartition.PartitionGuid;
-                }
-
-                if (CurrentPartition.PartitionGuid != Guid.Empty)
-                {
+                if (CurrentPartition.PartitionGuid == null)
                     CurrentPartition.PartitionGuid = Guid.NewGuid();
-                }
 
-                if ((NewPartition.PartitionTypeGuid != Guid.Empty) || (NewPartition.PartitionTypeGuid != CurrentPartition.PartitionTypeGuid))
-                {
+                if ((NewPartition.PartitionTypeGuid == null) || (NewPartition.PartitionTypeGuid != CurrentPartition.PartitionTypeGuid))
                     HasChanged = true;
-                }
-
-                if (NewPartition.PartitionTypeGuid != Guid.Empty)
-                {
+                if (NewPartition.PartitionTypeGuid != null)
                     CurrentPartition.PartitionTypeGuid = NewPartition.PartitionTypeGuid;
-                }
-
-                if (CurrentPartition.PartitionTypeGuid != Guid.Empty)
-                {
+                if (CurrentPartition.PartitionTypeGuid == null)
                     CurrentPartition.PartitionTypeGuid = Guid.NewGuid();
-                }
 
                 for (int i = this.Partitions.Count - 1; i >= 0; i--)
                 {
-                    if (this.Partitions[i] != CurrentPartition && (CurrentPartition.FirstSector <= this.Partitions[i].LastSector) && (CurrentPartition.LastSector >= this.Partitions[i].FirstSector))
+                    if (this.Partitions[i] != CurrentPartition)
                     {
-                        this.Partitions.RemoveAt(i);
-                        HasChanged = true;
+                        if ((CurrentPartition.FirstSector <= this.Partitions[i].LastSector) && (CurrentPartition.LastSector >= this.Partitions[i].FirstSector))
+                        {
+                            this.Partitions.RemoveAt(i);
+                            HasChanged = true;
+                        }
                     }
                 }
             }
@@ -465,31 +408,25 @@ namespace WPinternals
                 // Check if the sizes of the partitions in the archive do not exceed the size of the partition, as listed in the GPT.
                 foreach (Partition OldPartition in this.Partitions)
                 {
-                    ZipArchiveEntry Entry = Archive.Entries.FirstOrDefault(e => string.Equals(e.Name, OldPartition.Name, StringComparison.CurrentCultureIgnoreCase) || e.Name.StartsWith(OldPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US")));
+                    ZipArchiveEntry Entry = Archive.Entries.Where(e => ((string.Compare(e.Name, OldPartition.Name, true) == 0) || (e.Name.StartsWith(OldPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US"))))).FirstOrDefault();
                     if (Entry != null)
                     {
-                        DecompressedStream DecompressedStream = new(Entry.Open());
+                        DecompressedStream DecompressedStream = new DecompressedStream(Entry.Open());
                         ulong StreamLengthInSectors = (ulong)Entry.Length / 0x200;
                         try
                         {
                             StreamLengthInSectors = (ulong)DecompressedStream.Length / 0x200;
                         }
-                        catch (Exception ex)
-                        {
-                            LogFile.LogException(ex, LogType.FileOnly);
-                        }
+                        catch { }
                         DecompressedStream.Close();
 
                         UInt64 MaxPartitionSizeInSectors = OldPartition.SizeInSectors;
                         Partition NextPartition = this.Partitions.Where(p => p.FirstSector > OldPartition.FirstSector).OrderBy(p => p.FirstSector).FirstOrDefault();
                         if (NextPartition != null)
-                        {
                             MaxPartitionSizeInSectors = NextPartition.FirstSector - OldPartition.FirstSector;
-                        }
-
                         if (StreamLengthInSectors > MaxPartitionSizeInSectors)
                         {
-                            throw new WPinternalsException("Incorrect length for partition \"" + OldPartition.Name + "\". The provided partition in the archive does not match the length specified in the xml file.");
+                            throw new WPinternalsException("Incorrect length for partition \"" + OldPartition.Name + "\"");
                         }
 
                         if (OldPartition.SizeInSectors != StreamLengthInSectors)
@@ -509,9 +446,8 @@ namespace WPinternals
 
                     // Always start a new partition on a new chunk (0x100 sector boundary), to be more flexible during custom flash
                     if (RoundToChunks && (((double)FirstFreeSector % 0x100) != 0))
-                    {
                         FirstFreeSector = (UInt64)(Math.Ceiling((double)FirstFreeSector / 0x100) * 0x100);
-                    }
+
                 }
                 foreach (Partition NewPartition in DynamicPartitions)
                 {
@@ -520,17 +456,14 @@ namespace WPinternals
                         NewPartition.FirstSector = FirstFreeSector;
                         HasChanged = true;
                     }
-                    ZipArchiveEntry Entry = Archive.Entries.FirstOrDefault(e => string.Equals(e.Name, NewPartition.Name, StringComparison.CurrentCultureIgnoreCase) || e.Name.StartsWith(NewPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US")));
-                    DecompressedStream DecompressedStream = new(Entry.Open());
+                    ZipArchiveEntry Entry = Archive.Entries.Where(e => ((string.Compare(e.Name, NewPartition.Name, true) == 0) || (e.Name.StartsWith(NewPartition.Name + ".", true, System.Globalization.CultureInfo.GetCultureInfo("en-US"))))).FirstOrDefault();
+                    DecompressedStream DecompressedStream = new DecompressedStream(Entry.Open());
                     ulong StreamLengthInSectors = (ulong)Entry.Length / 0x200;
                     try
                     {
                         StreamLengthInSectors = (ulong)DecompressedStream.Length / 0x200;
                     }
-                    catch (Exception ex)
-                    {
-                        LogFile.LogException(ex, LogType.FileOnly);
-                    }
+                    catch { }
                     DecompressedStream.Close();
                     if (NewPartition.SizeInSectors != StreamLengthInSectors)
                     {
@@ -542,9 +475,7 @@ namespace WPinternals
 
                     // Always start a new partition on a new chunk (0x100 sector boundary), to be more flexible during custom flash
                     if (RoundToChunks && (((double)FirstFreeSector % 0x100) != 0))
-                    {
                         FirstFreeSector = (UInt64)(Math.Ceiling((double)FirstFreeSector / 0x100) * 0x100);
-                    }
                 }
             }
 
@@ -554,41 +485,33 @@ namespace WPinternals
         internal void WritePartitions(string Path)
         {
             string DirPath = System.IO.Path.GetDirectoryName(Path);
-            if (!string.IsNullOrEmpty(DirPath) && !Directory.Exists(DirPath))
-            {
+            if (!Directory.Exists(DirPath))
                 Directory.CreateDirectory(DirPath);
-            }
 
-            XmlSerializer x = new(typeof(GPT), "");
+            XmlSerializer x = new XmlSerializer(typeof(GPT), "");
 
-            XmlSerializerNamespaces ns = new();
+            XmlSerializerNamespaces ns = new XmlSerializerNamespaces();
             ns.Add("", "");
-            StreamWriter FileWriter = new(Path);
+            System.IO.StreamWriter FileWriter = new System.IO.StreamWriter(Path);
             x.Serialize(FileWriter, this, ns);
             FileWriter.Close();
         }
 
-        internal void WritePartitions(Stream Stream)
-        {
-            XmlSerializer x = new(typeof(GPT), "");
-
-            XmlSerializerNamespaces ns = new();
-            ns.Add("", "");
-            x.Serialize(Stream, this, ns);
-        }
-
         internal static GPT ReadPartitions(string Path)
         {
-            XmlSerializer x = new(typeof(GPT), "");
-            using FileStream s = new(Path, FileMode.Open);
-            return (GPT)x.Deserialize(s);
+            XmlSerializer x = new XmlSerializer(typeof(GPT), "");
+            using (FileStream s = new FileStream(Path, FileMode.Open))
+            {
+                return (GPT)x.Deserialize(s);
+            }
         }
 
         internal void RestoreBackupPartitions()
         {
             // This is necessary, because the partitions and backup-partitions can exchange.
             // This may cause the startsector to be higher than the maximum allowed sector for flashing with a Lumia V1 programmer (hardcoded in programmer)
-            foreach (string RevisePartitionName in (List<string>)(new(new string[] { "SBL1", "SBL2", "SBL3", "UEFI", "TZ", "RPM", "WINSECAPP" })))
+            List<string> RevisePartitions = new List<string>(new string[] { "SBL1", "SBL2", "SBL3", "UEFI", "TZ", "RPM", "WINSECAPP" });
+            foreach (string RevisePartitionName in RevisePartitions)
             {
                 Partition RevisePartition = GetPartition(RevisePartitionName);
                 Partition ReviseBackupPartition = GetPartition("BACKUP_" + RevisePartitionName);
@@ -605,10 +528,9 @@ namespace WPinternals
                 }
 
                 if (RevisePartition.LastSector >= 0xF400)
-                {
-                    throw new WPinternalsException("Unsupported partition layout!", "The last sector of one of the BACKUP partitions defined in GPT exceeds the maximum threshold expected in order to restore BACKUP partitions to the device.");
-                }
+                    throw new WPinternalsException("Unsupported partition layout!");
             }
+
         }
     }
 
@@ -630,21 +552,15 @@ namespace WPinternals
             get
             {
                 if (_SizeInSectors != 0)
-                {
                     return _SizeInSectors;
-                }
                 else
-                {
                     return LastSector - FirstSector + 1;
-                }
             }
             set
             {
                 _SizeInSectors = value;
                 if (FirstSector != 0)
-                {
                     LastSector = FirstSector + _SizeInSectors - 1;
-                }
             }
         }
 
@@ -659,9 +575,7 @@ namespace WPinternals
             {
                 _FirstSector = value;
                 if (_SizeInSectors != 0)
-                {
                     _LastSector = FirstSector + _SizeInSectors - 1;
-                }
             }
         }
 

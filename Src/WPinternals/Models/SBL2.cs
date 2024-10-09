@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -35,18 +35,16 @@ namespace WPinternals
         internal byte[] Patch()
         {
             UInt32? PatchOffset = ByteOperations.FindPattern(Binary,
-                [
+                new byte[] {
                     0xFF, 0xFF, 0xFF, 0xE3, 0x01, 0x0E, 0x42, 0xE3, 0x28, 0x00, 0xD0, 0xE5, 0x1E, 0xFF, 0x2F, 0xE1
-                ],
-                [
+                },
+                new byte[] {
                     0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-                ],
+                },
                 null);
-
+            
             if (PatchOffset == null)
-            {
                 throw new BadImageFormatException();
-            }
 
             Buffer.BlockCopy(new byte[] { 0x00, 0x00, 0xA0, 0xE3 }, 0, Binary, (int)PatchOffset + 8, 4);
 

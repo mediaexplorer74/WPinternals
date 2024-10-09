@@ -6,28 +6,38 @@
  */
 
 using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using System.Threading;
 namespace MadWizard.WinUSBNet
 {
     internal class USBAsyncResult : IAsyncResult, IDisposable
     {
-        private readonly AsyncCallback _userCallback;
+        private object _stateObject;
+        private AsyncCallback _userCallback;
         private bool _completed;
         private bool _completedSynchronously;
         private ManualResetEvent _waitEvent;
         private int _bytesTransfered;
         private Exception _error;
-
+        
         public USBAsyncResult(AsyncCallback userCallback, object stateObject)
         {
-            AsyncState = stateObject;
+            _stateObject = stateObject;
             _userCallback = userCallback;
             _completedSynchronously = false;
             _completed = false;
             _waitEvent = null;
         }
 
-        public object AsyncState { get; }
+        public object AsyncState
+        {
+            get 
+            {
+                return _stateObject;
+            }
+        }
 
         public Exception Error
         {
@@ -45,14 +55,12 @@ namespace MadWizard.WinUSBNet
         }
         public WaitHandle AsyncWaitHandle
         {
-            get
+            get 
             {
                 lock (this)
                 {
                     if (_waitEvent == null)
-                    {
                         _waitEvent = new ManualResetEvent(_completed);
-                    }
                 }
                 return _waitEvent;
             }
@@ -60,7 +68,7 @@ namespace MadWizard.WinUSBNet
 
         public bool CompletedSynchronously
         {
-            get
+            get 
             {
                 lock (this)
                 {
@@ -71,7 +79,7 @@ namespace MadWizard.WinUSBNet
 
         public bool IsCompleted
         {
-            get
+            get 
             {
                 lock (this)
                 {
@@ -94,19 +102,17 @@ namespace MadWizard.WinUSBNet
                 _completed = true;
                 _error = error;
                 _bytesTransfered = bytesTransfered;
-                _waitEvent?.Set();
+                if (_waitEvent != null)
+                    _waitEvent.Set();
             }
             if (_userCallback != null)
             {
                 if (synchronousCallback)
-                {
                     RunCallback(null);
-                }
                 else
-                {
                     ThreadPool.QueueUserWorkItem(RunCallback);
-                }
             }
+
         }
         private void RunCallback(object state)
         {
@@ -119,9 +125,12 @@ namespace MadWizard.WinUSBNet
                 // Cleanup managed resources
                 lock (this)
                 {
-                    _waitEvent?.Close();
+                    if (_waitEvent != null)
+                        _waitEvent.Close();
                 }
             }
         }
+
+    
     }
 }

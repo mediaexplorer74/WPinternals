@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -20,24 +20,26 @@
 
 using System;
 using System.Collections.Specialized;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Runtime.ConstrainedExecution;
 using System.Threading;
 
 namespace WPinternals
 {
     using Luid = NativeMethods.LUID;
-    using PrivilegeNotHeldException = System.Security.AccessControl.PrivilegeNotHeldException;
     using Win32Exception = System.ComponentModel.Win32Exception;
+    using PrivilegeNotHeldException = System.Security.AccessControl.PrivilegeNotHeldException;
 
     internal delegate void PrivilegedCallback(object state);
 
     internal sealed class Privilege
     {
         #region Private static members
-        private static readonly LocalDataStoreSlot tlsSlot = Thread.AllocateDataSlot();
-        private static readonly HybridDictionary privileges = new();
-        private static readonly HybridDictionary luids = new();
-        private static readonly ReaderWriterLock privilegeLock = new();
+        private static LocalDataStoreSlot tlsSlot = Thread.AllocateDataSlot();
+        private static HybridDictionary privileges = new HybridDictionary();
+        private static HybridDictionary luids = new HybridDictionary();
+        private static ReaderWriterLock privilegeLock = new ReaderWriterLock();
         #endregion
 
         #region Private members
@@ -91,6 +93,7 @@ namespace WPinternals
         // of privilege names to luids
         //
 
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         private static Luid LuidFromPrivilege(string privilege)
         {
             Luid luid;
@@ -100,6 +103,8 @@ namespace WPinternals
             //
             // Look up the privilege LUID inside the cache
             //
+
+            RuntimeHelpers.PrepareConstrainedRegions();
 
             try
             {
@@ -115,7 +120,7 @@ namespace WPinternals
                 {
                     privilegeLock.ReleaseReaderLock();
 
-                    if (!NativeMethods.LookupPrivilegeValue(null, privilege, ref luid))
+                    if (false == NativeMethods.LookupPrivilegeValue(null, privilege, ref luid))
                     {
                         int error = Marshal.GetLastWin32Error();
 
@@ -131,7 +136,7 @@ namespace WPinternals
                         {
                             throw new ArgumentException(
                                 string.Format("{0} is not a valid privilege name", privilege),
-                                nameof(privilege));
+                                "privilege");
                         }
                         else
                         {
@@ -170,10 +175,11 @@ namespace WPinternals
         {
             private bool disposed = false;
             private int referenceCount = 1;
-            private SafeTokenHandle threadHandle = new(IntPtr.Zero);
+            private SafeTokenHandle threadHandle = new SafeTokenHandle(IntPtr.Zero);
+            private bool isImpersonating = false;
 
-            private static SafeTokenHandle processHandle = new(IntPtr.Zero);
-            private static readonly object syncRoot = new();
+            private static SafeTokenHandle processHandle = new SafeTokenHandle(IntPtr.Zero);
+            private static readonly object syncRoot = new object();
 
             #region Constructor and finalizer
             public TlsContents()
@@ -186,29 +192,34 @@ namespace WPinternals
                 {
                     lock (syncRoot)
                     {
-                        if (processHandle.IsInvalid && !NativeMethods.OpenProcessToken(
+                        if (processHandle.IsInvalid)
+                        {
+                            if (false == NativeMethods.OpenProcessToken(
                                             NativeMethods.GetCurrentProcess(),
                                             TokenAccessLevels.Duplicate,
                                             ref processHandle))
-                        {
-                            cachingError = Marshal.GetLastWin32Error();
-                            success = false;
+                            {
+                                cachingError = Marshal.GetLastWin32Error();
+                                success = false;
+                            }
                         }
                     }
                 }
+
+                RuntimeHelpers.PrepareConstrainedRegions();
 
                 try
                 {
                     // Open the thread token; if there is no thread token,
                     // copy the process token onto the thread
 
-                    if (!NativeMethods.OpenThreadToken(
+                    if (false == NativeMethods.OpenThreadToken(
                         NativeMethods.GetCurrentThread(),
                         TokenAccessLevels.Query | TokenAccessLevels.AdjustPrivileges,
                         true,
                         ref this.threadHandle))
                     {
-                        if (success)
+                        if (success == true)
                         {
                             error = Marshal.GetLastWin32Error();
 
@@ -217,11 +228,11 @@ namespace WPinternals
                                 success = false;
                             }
 
-                            if (success)
+                            if (success == true)
                             {
                                 error = 0;
 
-                                if (!NativeMethods.DuplicateTokenEx(
+                                if (false == NativeMethods.DuplicateTokenEx(
                                     processHandle,
                                     TokenAccessLevels.Impersonate | TokenAccessLevels.Query | TokenAccessLevels.AdjustPrivileges,
                                     IntPtr.Zero,
@@ -234,19 +245,22 @@ namespace WPinternals
                                 }
                             }
 
-                            if (success && !NativeMethods.SetThreadToken(
+                            if (success == true)
+                            {
+                                if (false == NativeMethods.SetThreadToken(
                                     IntPtr.Zero,
                                     this.threadHandle))
-                            {
-                                error = Marshal.GetLastWin32Error();
-                                success = false;
+                                {
+                                    error = Marshal.GetLastWin32Error();
+                                    success = false;
+                                }
                             }
 
-                            if (success)
+                            if (success == true)
                             {
                                 // This thread is now impersonating; it needs to be reverted to its original state
 
-                                this.IsImpersonating = true;
+                                this.isImpersonating = true;
                             }
                         }
                         else
@@ -300,10 +314,7 @@ namespace WPinternals
 
             private void Dispose(bool disposing)
             {
-                if (this.disposed)
-                {
-                    return;
-                }
+                if (this.disposed) return;
 
                 if (this.threadHandle != null)
                 {
@@ -311,7 +322,7 @@ namespace WPinternals
                     this.threadHandle = null;
                 }
 
-                if (this.IsImpersonating)
+                if (this.isImpersonating)
                 {
                     NativeMethods.RevertToSelf();
                 }
@@ -350,7 +361,10 @@ namespace WPinternals
                 get { return this.threadHandle; }
             }
 
-            public bool IsImpersonating { get; } = false;
+            public bool IsImpersonating
+            {
+                get { return this.isImpersonating; }
+            }
             #endregion
         }
         #endregion
@@ -360,7 +374,7 @@ namespace WPinternals
         {
             if (privilegeName == null)
             {
-                throw new ArgumentNullException(nameof(privilegeName));
+                throw new ArgumentNullException("privilegeName");
             }
 
             this.luid = LuidFromPrivilege(privilegeName);
@@ -368,16 +382,19 @@ namespace WPinternals
         #endregion
 
         #region Public methods and properties
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         public void Enable()
         {
             this.ToggleState(true);
         }
 
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         public void Disable()
         {
             this.ToggleState(false);
         }
 
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         public void Revert()
         {
             int error = 0;
@@ -395,6 +412,8 @@ namespace WPinternals
             }
 
             // This code must be eagerly prepared and non-interruptible.
+
+            RuntimeHelpers.PrepareConstrainedRegions();
 
             try
             {
@@ -415,15 +434,15 @@ namespace WPinternals
                         (this.tlsContents.ReferenceCountValue > 1 ||
                         !this.tlsContents.IsImpersonating))
                     {
-                        NativeMethods.TOKEN_PRIVILEGE newState = new();
+                        NativeMethods.TOKEN_PRIVILEGE newState = new NativeMethods.TOKEN_PRIVILEGE();
                         newState.PrivilegeCount = 1;
                         newState.Privilege.Luid = this.luid;
-                        newState.Privilege.Attributes = this.initialState ? NativeMethods.SE_PRIVILEGE_ENABLED : NativeMethods.SE_PRIVILEGE_DISABLED;
+                        newState.Privilege.Attributes = (this.initialState ? NativeMethods.SE_PRIVILEGE_ENABLED : NativeMethods.SE_PRIVILEGE_DISABLED);
 
-                        NativeMethods.TOKEN_PRIVILEGE previousState = new();
+                        NativeMethods.TOKEN_PRIVILEGE previousState = new NativeMethods.TOKEN_PRIVILEGE();
                         uint previousSize = 0;
 
-                        if (!NativeMethods.AdjustTokenPrivileges(
+                        if (false == NativeMethods.AdjustTokenPrivileges(
                                         this.tlsContents.ThreadHandle,
                                         false,
                                         ref newState,
@@ -468,10 +487,12 @@ namespace WPinternals
         {
             if (callback == null)
             {
-                throw new ArgumentNullException(nameof(callback));
+                throw new ArgumentNullException("callback");
             }
 
-            Privilege p = new(privilege);
+            Privilege p = new Privilege(privilege);
+
+            RuntimeHelpers.PrepareConstrainedRegions();
 
             try
             {
@@ -499,6 +520,7 @@ namespace WPinternals
         #endregion
 
         #region Private implementation
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.MayFail)]
         private void ToggleState(bool enable)
         {
             int error = 0;
@@ -519,6 +541,8 @@ namespace WPinternals
 
             // Need to make this block of code non-interruptible so that it would preserve
             // consistency of thread oken state even in the face of catastrophic exceptions
+
+            RuntimeHelpers.PrepareConstrainedRegions();
 
             try
             {
@@ -544,17 +568,17 @@ namespace WPinternals
                         this.tlsContents.IncrementReferenceCount();
                     }
 
-                    NativeMethods.TOKEN_PRIVILEGE newState = new();
+                    NativeMethods.TOKEN_PRIVILEGE newState = new NativeMethods.TOKEN_PRIVILEGE();
                     newState.PrivilegeCount = 1;
                     newState.Privilege.Luid = this.luid;
                     newState.Privilege.Attributes = enable ? NativeMethods.SE_PRIVILEGE_ENABLED : NativeMethods.SE_PRIVILEGE_DISABLED;
 
-                    NativeMethods.TOKEN_PRIVILEGE previousState = new();
+                    NativeMethods.TOKEN_PRIVILEGE previousState = new NativeMethods.TOKEN_PRIVILEGE();
                     uint previousSize = 0;
 
                     // Place the new privilege on the thread token and remember the previous state.
 
-                    if (!NativeMethods.AdjustTokenPrivileges(
+                    if (false == NativeMethods.AdjustTokenPrivileges(
                                     this.tlsContents.ThreadHandle,
                                     false,
                                     ref newState,
@@ -572,11 +596,11 @@ namespace WPinternals
                     {
                         // This is the initial state that revert will have to go back to
 
-                        this.initialState = (previousState.Privilege.Attributes & NativeMethods.SE_PRIVILEGE_ENABLED) != 0;
+                        this.initialState = ((previousState.Privilege.Attributes & NativeMethods.SE_PRIVILEGE_ENABLED) != 0);
 
                         // Remember whether state has changed at all
 
-                        this.stateWasChanged = this.initialState != enable;
+                        this.stateWasChanged = (this.initialState != enable);
 
                         // If we had to impersonate, or if the privilege state changed we'll need to revert
 
@@ -611,8 +635,11 @@ namespace WPinternals
             }
         }
 
+        [ReliabilityContract(Consistency.WillNotCorruptState, Cer.Success)]
         private void Reset()
         {
+            RuntimeHelpers.PrepareConstrainedRegions();
+
             try
             {
                 // Payload is in the finally block
@@ -624,10 +651,13 @@ namespace WPinternals
                 this.initialState = false;
                 this.needToRevert = false;
 
-                if (this.tlsContents?.DecrementReferenceCount() == 0)
+                if (this.tlsContents != null)
                 {
-                    this.tlsContents = null;
-                    Thread.SetData(tlsSlot, null);
+                    if (0 == this.tlsContents.DecrementReferenceCount())
+                    {
+                        this.tlsContents = null;
+                        Thread.SetData(tlsSlot, null);
+                    }
                 }
             }
         }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -36,30 +36,23 @@ namespace WPinternals
 
         private void HandleHyperlinkClick(object sender, RoutedEventArgs args)
         {
-            if (args.Source is Hyperlink link)
+            Hyperlink link = args.Source as Hyperlink;
+            if (link != null)
             {
                 if (link.NavigateUri.ToString() == "UnlockBoot")
-                {
-                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel)?.SwitchToUnlockBoot();
-                }
+                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel).SwitchToUnlockBoot();
                 else if (link.NavigateUri.ToString() == "UnlockRoot")
-                {
-                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel)?.SwitchToUnlockRoot();
-                }
+                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel).SwitchToUnlockRoot();
                 else if (link.NavigateUri.ToString() == "Dump")
-                {
-                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel)?.SwitchToDumpFFU();
-                }
+                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel).SwitchToDumpFFU();
                 else if (link.NavigateUri.ToString() == "Backup")
-                {
-                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel)?.SwitchToBackup();
-                }
+                    (this.DataContext as LumiaFlashRomSourceSelectionViewModel).SwitchToBackup();
             }
         }
 
         private void Document_Loaded(object sender, RoutedEventArgs e)
         {
-            (sender as FlowDocument)?.AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(HandleHyperlinkClick));
+            (sender as FlowDocument).AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(HandleHyperlinkClick));
         }
 
         private void FilePicker_PathChanged(object sender, PathChangedEventArgs e)

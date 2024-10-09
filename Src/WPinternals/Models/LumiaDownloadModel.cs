@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -20,17 +20,16 @@
 
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Runtime.Serialization;
+using System.Runtime.Serialization.Json;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Json;
-using System.Text;
-using System.Threading.Tasks;
+using System.IO;
 using System.Xml;
-using System.Xml.Serialization;
 
 namespace WPinternals
 {
@@ -38,25 +37,18 @@ namespace WPinternals
     {
         internal static string SearchFFU(string ProductType, string ProductCode, string OperatorCode)
         {
-            return SearchFFU(ProductType, ProductCode, OperatorCode, out string FoundProductType);
+            string FoundProductType;
+            return SearchFFU(ProductType, ProductCode, OperatorCode, out FoundProductType);
         }
 
         internal static string SearchFFU(string ProductType, string ProductCode, string OperatorCode, out string FoundProductType)
         {
-            if (ProductType?.Length == 0)
-            {
+            if (ProductType == "")
                 ProductType = null;
-            }
-
-            if (ProductCode?.Length == 0)
-            {
+            if (ProductCode == "")
                 ProductCode = null;
-            }
-
-            if (OperatorCode?.Length == 0)
-            {
+            if (OperatorCode == "")
                 OperatorCode = null;
-            }
 
             if (ProductCode != null)
             {
@@ -68,16 +60,12 @@ namespace WPinternals
             {
                 ProductType = ProductType.ToUpper();
                 if (ProductType.StartsWith("RM") && !ProductType.StartsWith("RM-"))
-                {
-                    ProductType = "RM-" + ProductType[2..];
-                }
+                    ProductType = "RM-" + ProductType.Substring(2);
             }
             if (OperatorCode != null)
-            {
                 OperatorCode = OperatorCode.ToUpper();
-            }
 
-            DiscoveryQueryParameters DiscoveryQueryParams = new()
+            DiscoveryQueryParameters DiscoveryQueryParams = new DiscoveryQueryParameters
             {
                 manufacturerName = "Microsoft",
                 manufacturerProductLine = "Lumia",
@@ -87,20 +75,20 @@ namespace WPinternals
                 manufacturerHardwareVariant = ProductCode,
                 operatorName = OperatorCode
             };
-            DiscoveryParameters DiscoveryParams = new()
+            DiscoveryParameters DiscoveryParams = new DiscoveryParameters
             {
                 query = DiscoveryQueryParams
             };
 
-            DataContractJsonSerializer Serializer1 = new(typeof(DiscoveryParameters));
-            MemoryStream JsonStream1 = new();
+            DataContractJsonSerializer Serializer1 = new DataContractJsonSerializer(typeof(DiscoveryParameters));
+            MemoryStream JsonStream1 = new MemoryStream();
             Serializer1.WriteObject(JsonStream1, DiscoveryParams);
             JsonStream1.Seek(0L, SeekOrigin.Begin);
             string JsonContent = new StreamReader(JsonStream1).ReadToEnd();
 
-            Uri RequestUri = new("https://api.swrepository.com/rest-api/discovery/1/package");
+            Uri RequestUri = new Uri("https://api.swrepository.com/rest-api/discovery/1/package");
 
-            HttpClient HttpClient = new();
+            HttpClient HttpClient = new HttpClient();
             HttpClient.DefaultRequestHeaders.UserAgent.TryParseAdd("SoftwareRepository");
             HttpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
@@ -117,39 +105,37 @@ namespace WPinternals
             }
 
             SoftwarePackage Package = null;
-            using (MemoryStream JsonStream2 = new(Encoding.UTF8.GetBytes(JsonResultString)))
+            using (MemoryStream JsonStream2 = new MemoryStream(Encoding.UTF8.GetBytes(JsonResultString)))
             {
-                DataContractJsonSerializer Serializer2 = new(typeof(SoftwarePackages));
+                DataContractJsonSerializer Serializer2 = new DataContractJsonSerializer(typeof(SoftwarePackages));
                 SoftwarePackages SoftwarePackages = (SoftwarePackages)Serializer2.ReadObject(JsonStream2);
                 if (SoftwarePackages != null)
                 {
-                    Package = SoftwarePackages.softwarePackages.FirstOrDefault();
+                    Package = SoftwarePackages.softwarePackages.FirstOrDefault<SoftwarePackage>();
                 }
             }
 
             if (Package == null)
-            {
-                throw new WPinternalsException("FFU not found", "No FFU has been found in the remote software repository for the requested model.");
-            }
+                throw new WPinternalsException("FFU not found");
 
             FoundProductType = Package.manufacturerHardwareModel[0];
 
-            SoftwareFile FileInfo = Package.files.First(f => f.fileName.EndsWith(".ffu", StringComparison.OrdinalIgnoreCase));
+            SoftwareFile FileInfo = Package.files.Where(f => f.fileName.EndsWith(".ffu", StringComparison.OrdinalIgnoreCase)).First();
 
-            Uri FileInfoUri = new("https://api.swrepository.com/rest-api/discovery/fileurl/1/" + Package.id + "/" + FileInfo.fileName);
+            Uri FileInfoUri = new Uri("https://api.swrepository.com/rest-api/discovery/fileurl/1/" + Package.id + "/" + FileInfo.fileName);
             Task<string> GetFileInfoTask = HttpClient.GetStringAsync(FileInfoUri);
             GetFileInfoTask.Wait();
             string FileInfoString = GetFileInfoTask.Result;
 
             string FfuUrl = "";
             FileUrlResult FileUrl = null;
-            using (MemoryStream JsonStream3 = new(Encoding.UTF8.GetBytes(FileInfoString)))
+            using (MemoryStream JsonStream3 = new MemoryStream(Encoding.UTF8.GetBytes(FileInfoString)))
             {
-                DataContractJsonSerializer Serializer3 = new(typeof(FileUrlResult));
+                DataContractJsonSerializer Serializer3 = new DataContractJsonSerializer(typeof(FileUrlResult));
                 FileUrl = (FileUrlResult)Serializer3.ReadObject(JsonStream3);
                 if (FileUrl != null)
                 {
-                    FfuUrl = FileUrl.url.Replace("sr.azureedge.net", "softwarerepo.blob.core.windows.net");
+                    FfuUrl = FileUrl.url;
                 }
             }
 
@@ -158,166 +144,11 @@ namespace WPinternals
             return FfuUrl;
         }
 
-        internal static (string SecureWIMUrl, string DPLUrl) SearchENOSW(string ProductType, string PhoneFirmwareRevision)
-        {
-            if (ProductType?.Length == 0)
-            {
-                ProductType = null;
-            }
-
-            if (ProductType != null)
-            {
-                ProductType = ProductType.ToUpper();
-                if (ProductType.StartsWith("RM") && !ProductType.StartsWith("RM-"))
-                {
-                    ProductType = $"RM-{ProductType[2..]}";
-                }
-            }
-
-            DiscoveryQueryParameters DiscoveryQueryParams = new()
-            {
-                manufacturerName = "Microsoft",
-                manufacturerProductLine = "Lumia",
-                packageType = "Test Mode",
-                packageClass = "Public",
-                manufacturerHardwareModel = ProductType
-            };
-
-            DiscoveryParameters DiscoveryParams = new()
-            {
-                query = DiscoveryQueryParams
-            };
-
-            DataContractJsonSerializer Serializer1 = new(typeof(DiscoveryParameters));
-            MemoryStream JsonStream1 = new();
-            Serializer1.WriteObject(JsonStream1, DiscoveryParams);
-            JsonStream1.Seek(0L, SeekOrigin.Begin);
-            string JsonContent = new StreamReader(JsonStream1).ReadToEnd();
-
-            Uri RequestUri = new("https://api.swrepository.com/rest-api/discovery/1/package");
-
-            HttpClient HttpClient = new();
-            HttpClient.DefaultRequestHeaders.UserAgent.TryParseAdd("SoftwareRepository");
-            HttpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-
-            Task<HttpResponseMessage> HttpPostTask = HttpClient.PostAsync(RequestUri, new StringContent(JsonContent, Encoding.UTF8, "application/json"));
-            HttpPostTask.Wait();
-            HttpResponseMessage Response = HttpPostTask.Result;
-
-            string JsonResultString = "";
-            if (Response.StatusCode == HttpStatusCode.OK)
-            {
-                Task<string> ReadResponseTask = Response.Content.ReadAsStringAsync();
-                ReadResponseTask.Wait();
-                JsonResultString = ReadResponseTask.Result;
-            }
-
-            SoftwarePackage Package = null;
-            using MemoryStream JsonResultStream = new(Encoding.UTF8.GetBytes(JsonResultString));
-            DataContractJsonSerializer SoftwarePackagesJsonSerializer = new(typeof(SoftwarePackages));
-            SoftwarePackages SoftwarePackages = (SoftwarePackages)SoftwarePackagesJsonSerializer.ReadObject(JsonResultStream);
-
-            if (SoftwarePackages != null)
-            {
-                foreach (SoftwarePackage pkg in SoftwarePackages.softwarePackages)
-                {
-                    Package = SoftwarePackages.softwarePackages.FirstOrDefault();
-                }
-            }
-
-            if (Package == null)
-            {
-                throw new WPinternalsException("ENOSW package not found", "No ENOSW package has been found in the remote software repository for the requested model.");
-            }
-
-            SoftwareFile SecureWimSoftwareFile = Package.files.First(f => f.fileName.EndsWith(".secwim", StringComparison.OrdinalIgnoreCase));
-            SoftwareFile DPLSoftwareFile = Package.files.First(f => f.fileName.EndsWith(".dpl", StringComparison.OrdinalIgnoreCase));
-
-            Uri DPLFileUrlUri = new($"https://api.swrepository.com/rest-api/discovery/fileurl/1/{Package.id}/{DPLSoftwareFile.fileName}");
-
-            Task<string> GetDPLTask = HttpClient.GetStringAsync(DPLFileUrlUri);
-            GetDPLTask.Wait();
-
-            string DPLFileUrlResultContent = GetDPLTask.Result;
-            FileUrlResult DPLFileUrlResult = null;
-            using MemoryStream DPLFileUrlResultStream = new(Encoding.UTF8.GetBytes(DPLFileUrlResultContent));
-            DataContractJsonSerializer DPLFileUrlResultSerializer = new(typeof(FileUrlResult));
-            DPLFileUrlResult = (FileUrlResult)DPLFileUrlResultSerializer.ReadObject(DPLFileUrlResultStream);
-
-            string DPLFileUrl = "";
-
-            if (DPLFileUrlResult != null)
-            {
-                DPLFileUrl = DPLFileUrlResult.url.Replace("sr.azureedge.net", "softwarerepo.blob.core.windows.net");
-            }
-
-            if (DPLFileUrl?.Length == 0)
-            {
-                throw new WPinternalsException("DPL not found", "No DPL has been found in the remote software repository for the requested model.");
-            }
-
-            Task<string> GetDPLStrTask = HttpClient.GetStringAsync(DPLFileUrl);
-            GetDPLStrTask.Wait();
-            string DPLStrString = GetDPLStrTask.Result;
-
-            DPL.Package dpl;
-            XmlSerializer serializer = new(typeof(DPL.Package));
-            using StringReader reader = new(DPLStrString.Replace("ft:", "").Replace("dpl:", "").Replace("typedes:", ""));
-            dpl = (DPL.Package)serializer.Deserialize(reader);
-
-            foreach (DPL.File file in dpl.Content.Files.File)
-            {
-                string name = file.Name;
-
-                DPL.Range range = file.Extensions.MmosWimFile.UseCaseCompatibilities.Compatibility.FirstOrDefault().Range;
-
-                if (IsFirmwareBetween(PhoneFirmwareRevision, range.From, range.To))
-                {
-                    SecureWimSoftwareFile = Package.files.First(f => f.fileName.EndsWith(name, StringComparison.OrdinalIgnoreCase));
-                }
-            }
-
-            Uri FileInfoUri = new("https://api.swrepository.com/rest-api/discovery/fileurl/1/" + Package.id + "/" + SecureWimSoftwareFile.fileName);
-            Task<string> GetFileInfoTask = HttpClient.GetStringAsync(FileInfoUri);
-            GetFileInfoTask.Wait();
-            string FileInfoString = GetFileInfoTask.Result;
-
-            string ENOSWFileUrl = "";
-
-            FileUrlResult FileUrl = null;
-
-            using MemoryStream JsonStream4 = new(Encoding.UTF8.GetBytes(FileInfoString));
-            DataContractJsonSerializer Serializer4 = new(typeof(FileUrlResult));
-            FileUrl = (FileUrlResult)Serializer4.ReadObject(JsonStream4);
-            if (FileUrl != null)
-            {
-                ENOSWFileUrl = FileUrl.url.Replace("sr.azureedge.net", "softwarerepo.blob.core.windows.net");
-            }
-
-            HttpClient.Dispose();
-
-            return (ENOSWFileUrl, DPLFileUrl);
-        }
-
-        private static bool IsFirmwareBetween(string PhoneFirmwareRevision, string Limit1, string Limit2)
-        {
-            var version = new Version(PhoneFirmwareRevision);
-            var version1 = new Version(Limit1);
-            var version2 = new Version(Limit2);
-
-            var result = version.CompareTo(version1);
-            var result2 = version.CompareTo(version2);
-
-            return result >= 0 && result2 <= 0;
-        }
-
         internal static string[] SearchEmergencyFiles(string ProductType)
         {
             ProductType = ProductType.ToUpper();
             if (ProductType.StartsWith("RM") && !ProductType.StartsWith("RM-"))
-            {
-                ProductType = "RM-" + ProductType[2..];
-            }
+                ProductType = "RM-" + ProductType.Substring(2);
 
             LogFile.Log("Getting Emergency files for: " + ProductType, LogType.FileAndConsole);
 
@@ -327,15 +158,15 @@ namespace WPinternals
                 ProductType = "RM-1113";
             }
 
-            List<string> Result = new();
+            List<string> Result = new List<string>();
 
-            WebClient Client = new();
+            WebClient Client = new WebClient();
             string Src;
             string FileName;
             string Config = null;
             try
             {
-                Config = Client.DownloadString("https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/emergency_flash_config.xml");
+                Config = Client.DownloadString(@"https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/emergency_flash_config.xml");
             }
             catch
             {
@@ -344,7 +175,7 @@ namespace WPinternals
             }
             Client.Dispose();
 
-            XmlDocument Doc = new();
+            XmlDocument Doc = new XmlDocument();
             Doc.LoadXml(Config);
 
             // Hex
@@ -352,7 +183,7 @@ namespace WPinternals
             if (Node != null)
             {
                 FileName = Node.Attributes["image_path"].InnerText;
-                Src = "https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
+                Src = @"https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
                 LogFile.Log("Hex-file: " + Src);
                 Result.Add(Src);
             }
@@ -362,7 +193,7 @@ namespace WPinternals
             if (Node != null)
             {
                 FileName = Node.Attributes["image_path"].InnerText;
-                Src = "https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
+                Src = @"https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
                 LogFile.Log("Mbn-file: " + Src);
                 Result.Add(Src);
             }
@@ -371,7 +202,7 @@ namespace WPinternals
             foreach (XmlNode SubNode in Doc.SelectNodes("//emergency_flash_config/first_boot_images/first_boot_image"))
             {
                 FileName = SubNode.Attributes["image_path"].InnerText;
-                Src = "https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
+                Src = @"https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
                 LogFile.Log("Firehose-programmer-file: " + Src);
                 Result.Add(Src);
             }
@@ -380,16 +211,16 @@ namespace WPinternals
             foreach (XmlNode SubNode in Doc.SelectNodes("//emergency_flash_config/second_boot_firehose_single_image/firehose_image"))
             {
                 FileName = SubNode.Attributes["image_path"].InnerText;
-                Src = "https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
+                Src = @"https://repairavoidance.blob.core.windows.net/packages/EmergencyFlash/" + ProductType + "/" + FileName;
                 LogFile.Log("Firehose-payload-file: " + Src);
                 Result.Add(Src);
             }
 
-            return [.. Result];
+            return Result.ToArray();
         }
     }
 
-#pragma warning disable 0649
+    #pragma warning disable 0649
     [DataContract]
     internal class FileUrlResult
     {
@@ -405,7 +236,7 @@ namespace WPinternals
         [DataMember]
         internal List<SoftwareFileChecksum> checksum;
     }
-#pragma warning restore 0649
+    #pragma warning restore 0649
 
     [DataContract]
     public class DiscoveryQueryParameters
@@ -480,7 +311,7 @@ namespace WPinternals
         [DataMember]
         public List<string> response;
 
-        public DiscoveryParameters() : this(DiscoveryCondition.Default)
+        public DiscoveryParameters(): this(DiscoveryCondition.Default)
         {
         }
 
@@ -643,217 +474,5 @@ namespace WPinternals
 
         [DataMember]
         public string fileType;
-    }
-
-    public static class DPL
-    {
-        [XmlRoot(ElementName = "BasicProductCodes")]
-        public class BasicProductCodes
-        {
-            [XmlElement(ElementName = "BasicProductCode")]
-            public List<string> BasicProductCode { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Identification")]
-        public class Identification
-        {
-            [XmlElement(ElementName = "TypeDesignator")]
-            public string TypeDesignator { get; set; }
-            [XmlElement(ElementName = "BasicProductCodes")]
-            public BasicProductCodes BasicProductCodes { get; set; }
-            [XmlElement(ElementName = "Purpose")]
-            public string Purpose { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Extensions")]
-        public class Extensions
-        {
-            [XmlElement(ElementName = "PackageType")]
-            public string PackageType { get; set; }
-            [XmlElement(ElementName = "Identification")]
-            public Identification Identification { get; set; }
-            [XmlElement(ElementName = "FileType")]
-            public string FileType { get; set; }
-            [XmlElement(ElementName = "MmosWimFile")]
-            public MmosWimFile MmosWimFile { get; set; }
-        }
-
-        [XmlRoot(ElementName = "PackageDescription")]
-        public class PackageDescription
-        {
-            [XmlElement(ElementName = "Identifier")]
-            public string Identifier { get; set; }
-            [XmlElement(ElementName = "Revision")]
-            public string Revision { get; set; }
-            [XmlElement(ElementName = "Extensions")]
-            public Extensions Extensions { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Digest")]
-        public class Digest
-        {
-            [XmlAttribute(AttributeName = "method")]
-            public string Method { get; set; }
-            [XmlAttribute(AttributeName = "encoding")]
-            public string Encoding { get; set; }
-            [XmlText]
-            public string Text { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Digests")]
-        public class Digests
-        {
-            [XmlElement(ElementName = "Digest")]
-            public List<Digest> Digest { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Range")]
-        public class Range
-        {
-            [XmlAttribute(AttributeName = "from")]
-            public string From { get; set; }
-            [XmlAttribute(AttributeName = "to")]
-            public string To { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Compatibility")]
-        public class Compatibility
-        {
-            [XmlElement(ElementName = "Range")]
-            public Range Range { get; set; }
-            [XmlAttribute(AttributeName = "useCase")]
-            public string UseCase { get; set; }
-        }
-
-        [XmlRoot(ElementName = "UseCaseCompatibilities")]
-        public class UseCaseCompatibilities
-        {
-            [XmlElement(ElementName = "Compatibility")]
-            public List<Compatibility> Compatibility { get; set; }
-        }
-
-        [XmlRoot(ElementName = "MmosWimFile")]
-        public class MmosWimFile
-        {
-            [XmlElement(ElementName = "UseCaseCompatibilities")]
-            public UseCaseCompatibilities UseCaseCompatibilities { get; set; }
-        }
-
-        [XmlRoot(ElementName = "File")]
-        public class File
-        {
-            [XmlElement(ElementName = "Name")]
-            public string Name { get; set; }
-            [XmlElement(ElementName = "Digests")]
-            public Digests Digests { get; set; }
-            [XmlElement(ElementName = "Revision")]
-            public string Revision { get; set; }
-            [XmlElement(ElementName = "Extensions")]
-            public Extensions Extensions { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Files")]
-        public class Files
-        {
-            [XmlElement(ElementName = "File")]
-            public List<File> File { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Content")]
-        public class Content
-        {
-            [XmlElement(ElementName = "PackageDescription")]
-            public PackageDescription PackageDescription { get; set; }
-            [XmlElement(ElementName = "Files")]
-            public Files Files { get; set; }
-        }
-
-        [XmlRoot(ElementName = "CanonicalizationMethod", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class CanonicalizationMethod
-        {
-            [XmlAttribute(AttributeName = "Algorithm")]
-            public string Algorithm { get; set; }
-        }
-
-        [XmlRoot(ElementName = "SignatureMethod", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class SignatureMethod
-        {
-            [XmlAttribute(AttributeName = "Algorithm")]
-            public string Algorithm { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Transform", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class Transform
-        {
-            [XmlAttribute(AttributeName = "Algorithm")]
-            public string Algorithm { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Transforms", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class Transforms
-        {
-            [XmlElement(ElementName = "Transform", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public Transform Transform { get; set; }
-        }
-
-        [XmlRoot(ElementName = "DigestMethod", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class DigestMethod
-        {
-            [XmlAttribute(AttributeName = "Algorithm")]
-            public string Algorithm { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Reference", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class Reference
-        {
-            [XmlElement(ElementName = "Transforms", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public Transforms Transforms { get; set; }
-            [XmlElement(ElementName = "DigestMethod", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public DigestMethod DigestMethod { get; set; }
-            [XmlElement(ElementName = "DigestValue", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public string DigestValue { get; set; }
-            [XmlAttribute(AttributeName = "URI")]
-            public string URI { get; set; }
-        }
-
-        [XmlRoot(ElementName = "SignedInfo", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class SignedInfo
-        {
-            [XmlElement(ElementName = "CanonicalizationMethod", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public CanonicalizationMethod CanonicalizationMethod { get; set; }
-            [XmlElement(ElementName = "SignatureMethod", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public SignatureMethod SignatureMethod { get; set; }
-            [XmlElement(ElementName = "Reference", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public Reference Reference { get; set; }
-        }
-
-        [XmlRoot(ElementName = "KeyInfo", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class KeyInfo
-        {
-            [XmlElement(ElementName = "KeyName", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public string KeyName { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Signature", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-        public class Signature
-        {
-            [XmlElement(ElementName = "SignedInfo", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public SignedInfo SignedInfo { get; set; }
-            [XmlElement(ElementName = "SignatureValue", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public string SignatureValue { get; set; }
-            [XmlElement(ElementName = "KeyInfo", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public KeyInfo KeyInfo { get; set; }
-            [XmlAttribute(AttributeName = "xmlns")]
-            public string Xmlns { get; set; }
-        }
-
-        [XmlRoot(ElementName = "Package")]
-        public class Package
-        {
-            [XmlElement(ElementName = "Content")]
-            public Content Content { get; set; }
-            [XmlElement(ElementName = "Signature", Namespace = "http://www.w3.org/2000/09/xmldsig#")]
-            public Signature Signature { get; set; }
-        }
     }
 }

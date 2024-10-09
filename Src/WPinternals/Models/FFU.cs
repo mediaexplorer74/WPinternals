@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -31,7 +31,7 @@ namespace WPinternals
         internal byte[] SecurityHeader;
         internal byte[] ImageHeader;
         internal byte[] StoreHeader;
-        private readonly int?[] ChunkIndexes;
+        private int?[] ChunkIndexes;
         private FileStream FFUFile = null;
         private int FileOpenCount = 0;
 
@@ -55,10 +55,7 @@ namespace WPinternals
                 byte[] ShortSecurityHeader = new byte[0x20];
                 FFUFile.Read(ShortSecurityHeader, 0, 0x20);
                 if (ByteOperations.ReadAsciiString(ShortSecurityHeader, 0x04, 0x0C) != "SignedImage ")
-                {
                     throw new BadImageFormatException();
-                }
-
                 ChunkSize = ByteOperations.ReadInt32(ShortSecurityHeader, 0x10) * 1024;
                 UInt32 SecurityHeaderSize = ByteOperations.ReadUInt32(ShortSecurityHeader, 0x00);
                 UInt32 CatalogSize = ByteOperations.ReadUInt32(ShortSecurityHeader, 0x18);
@@ -71,10 +68,7 @@ namespace WPinternals
                 byte[] ShortImageHeader = new byte[0x1C];
                 FFUFile.Read(ShortImageHeader, 0, 0x1C);
                 if (ByteOperations.ReadAsciiString(ShortImageHeader, 0x04, 0x0C) != "ImageFlash  ")
-                {
                     throw new BadImageFormatException();
-                }
-
                 UInt32 ImageHeaderSize = ByteOperations.ReadUInt32(ShortImageHeader, 0x00);
                 UInt32 ManifestSize = ByteOperations.ReadUInt32(ShortImageHeader, 0x10);
                 ImageHeader = new byte[RoundUpToChunks(ImageHeaderSize + ManifestSize)];
@@ -84,7 +78,7 @@ namespace WPinternals
                 // Read Store Header
                 byte[] ShortStoreHeader = new byte[248];
                 FFUFile.Read(ShortStoreHeader, 0, 248);
-                PlatformID = ByteOperations.ReadAsciiString(ShortStoreHeader, 0x0C, 192).TrimEnd([(char)0, ' ']);
+                PlatformID = ByteOperations.ReadAsciiString(ShortStoreHeader, 0x0C, 192).TrimEnd(new char[] { (char)0, ' ' });
                 int WriteDescriptorCount = ByteOperations.ReadInt32(ShortStoreHeader, 208);
                 UInt32 WriteDescriptorLength = ByteOperations.ReadUInt32(ShortStoreHeader, 212);
                 UInt32 ValidateDescriptorLength = ByteOperations.ReadUInt32(ShortStoreHeader, 220);
@@ -110,9 +104,10 @@ namespace WPinternals
                         DiskAccessMethod = ByteOperations.ReadInt32(StoreHeader, (UInt32)(WriteDescriptorEntryOffset + 0x08 + (j * 0x08)));
                         ChunkIndex = ByteOperations.ReadInt32(StoreHeader, (UInt32)(WriteDescriptorEntryOffset + 0x0C + (j * 0x08)));
 
-                        if (DiskAccessMethod == 0 && (ChunkIndex + ChunkCount - 1) > HighestChunkIndex) // 0 = From begin, 2 = From end. We ignore chunks at end of disk. These contain secondairy GPT.
+                        if (DiskAccessMethod == 0) // 0 = From begin, 2 = From end. We ignore chunks at end of disk. These contain secondairy GPT.
                         {
-                            HighestChunkIndex = ChunkIndex + ChunkCount - 1;
+                            if ((ChunkIndex + ChunkCount - 1) > HighestChunkIndex)
+                                HighestChunkIndex = ChunkIndex + ChunkCount - 1;
                         }
                     }
                     WriteDescriptorEntryOffset += 8 + (LocationCount * 0x08);
@@ -153,9 +148,7 @@ namespace WPinternals
                 TotalSize = HeaderSize + PayloadSize;
 
                 if (TotalSize != (UInt64)FFUFile.Length)
-                {
                     throw new WPinternalsException("Bad FFU file", "Bad FFU file: " + Path + "." + Environment.NewLine + "Expected size: " + TotalSize.ToString() + ". Actual size: " + FFUFile.Length + ".");
-                }
             }
             catch (WPinternalsException)
             {
@@ -175,12 +168,12 @@ namespace WPinternals
         {
             bool Result = false;
 
-            FileStream FFUFile = new(FileName, FileMode.Open, FileAccess.Read);
+            FileStream FFUFile = new FileStream(FileName, FileMode.Open, FileAccess.Read);
 
             byte[] Signature = new byte[0x10];
             FFUFile.Read(Signature, 0, 0x10);
 
-            Result = ByteOperations.ReadAsciiString(Signature, 0x04, 0x0C) == "SignedImage ";
+            Result = (ByteOperations.ReadAsciiString(Signature, 0x04, 0x0C) == "SignedImage ");
 
             FFUFile.Close();
 
@@ -211,34 +204,27 @@ namespace WPinternals
         {
             // https://social.msdn.microsoft.com/Forums/vstudio/en-US/2e67ca57-3556-4275-accd-58b7df30d424/unnecessary-filestreamseek-and-setting-filestreamposition-has-huge-effect-on-performance?forum=csharpgeneral
 
-            if (FFUFile != null && FFUFile.Position != Position)
+            if (FFUFile != null)
             {
-                FFUFile.Seek(Position, SeekOrigin.Begin);
+                if (FFUFile.Position != Position)
+                    FFUFile.Seek(Position, SeekOrigin.Begin);
             }
         }
 
         internal UInt32 RoundUpToChunks(UInt32 Size)
         {
             if ((Size % ChunkSize) > 0)
-            {
                 return (UInt32)(((Size / ChunkSize) + 1) * ChunkSize);
-            }
             else
-            {
                 return Size;
-            }
         }
 
         internal UInt32 RoundDownToChunks(UInt32 Size)
         {
             if ((Size % ChunkSize) > 0)
-            {
-                return (UInt32)(Size / ChunkSize * ChunkSize);
-            }
+                return (UInt32)((Size / ChunkSize) * ChunkSize);
             else
-            {
                 return Size;
-            }
         }
 
         internal byte[] GetSectors(int StartSector, int SectorCount)
@@ -262,14 +248,10 @@ namespace WPinternals
                 int LastSector = (ChunkSize / 0x200) - 1;
 
                 if (j == FirstChunk)
-                {
                     FirstSector = GetSectorNumberInChunkFromSectorIndex(StartSector);
-                }
 
                 if (j == LastChunk)
-                {
                     LastSector = GetSectorNumberInChunkFromSectorIndex(StartSector + SectorCount - 1);
-                }
 
                 int Offset = FirstSector * 0x200;
                 int Size = (LastSector - FirstSector + 1) * 0x200;
@@ -286,12 +268,9 @@ namespace WPinternals
 
         internal byte[] GetPartition(string Name)
         {
-            Partition Target = GPT.Partitions.Find(p => string.Equals(p.Name, Name, StringComparison.CurrentCultureIgnoreCase));
+            Partition Target = GPT.Partitions.Where(p => (string.Compare(p.Name, Name, true) == 0)).FirstOrDefault();
             if (Target == null)
-            {
                 throw new ArgumentOutOfRangeException();
-            }
-
             return GetSectors((int)Target.FirstSector, (int)(Target.LastSector - Target.FirstSector + 1));
         }
 
@@ -312,26 +291,22 @@ namespace WPinternals
 
         private void WritePartition(string Name, string FilePath, Action<int, TimeSpan?> ProgressUpdateCallback, ProgressUpdater UpdaterPerSector, bool Compress = false)
         {
-            Partition Target = GPT.Partitions.Find(p => string.Equals(p.Name, Name, StringComparison.CurrentCultureIgnoreCase));
+            Partition Target = GPT.Partitions.Where(p => (string.Compare(p.Name, Name, true) == 0)).FirstOrDefault();
             if (Target == null)
-            {
                 throw new ArgumentOutOfRangeException();
-            }
 
             int FirstChunk = GetChunkIndexFromSectorIndex((int)Target.FirstSector);
             int LastChunk = GetChunkIndexFromSectorIndex((int)Target.LastSector);
 
             ProgressUpdater Updater = UpdaterPerSector;
             if ((Updater == null) && (ProgressUpdateCallback != null))
-            {
                 Updater = new ProgressUpdater(Target.LastSector - Target.FirstSector + 1, ProgressUpdateCallback);
-            }
 
             byte[] Buffer = new byte[ChunkSize];
 
             OpenFile();
 
-            FileStream OutputFile = new(FilePath, FileMode.Create, FileAccess.Write);
+            FileStream OutputFile = new FileStream(FilePath, FileMode.Create, FileAccess.Write);
             Stream OutStream = OutputFile;
 
             // We use gzip compression
@@ -358,21 +333,18 @@ namespace WPinternals
                 int LastSector = (ChunkSize / 0x200) - 1;
 
                 if (j == FirstChunk)
-                {
                     FirstSector = GetSectorNumberInChunkFromSectorIndex((int)Target.FirstSector);
-                }
 
                 if (j == LastChunk)
-                {
                     LastSector = GetSectorNumberInChunkFromSectorIndex((int)Target.LastSector);
-                }
 
                 int Offset = FirstSector * 0x200;
                 int Size = (LastSector - FirstSector + 1) * 0x200;
 
                 OutStream.Write(Buffer, Offset, Size);
 
-                Updater?.IncreaseProgress((UInt64)(ChunkSize / 0x200));
+                if (Updater != null)
+                    Updater.IncreaseProgress((UInt64)(ChunkSize / 0x200));
             }
 
             OutStream.Close();
@@ -384,9 +356,7 @@ namespace WPinternals
         {
             long BaseOffset = (long)SecurityHeader.Length + ImageHeader.Length + StoreHeader.Length;
             if (ChunkIndexes[ChunkIndex] == null)
-            {
                 return new byte[ChunkSize];
-            }
             else
             {
                 OpenFile();
@@ -402,9 +372,7 @@ namespace WPinternals
         {
             long BaseOffset = SecurityHeader.Length + ImageHeader.Length + StoreHeader.Length;
             if (ChunkIndexes[ChunkIndex] == null)
-            {
                 Array.Clear(Chunk, 0, ChunkSize);
-            }
             else
             {
                 OpenFile();
@@ -430,12 +398,9 @@ namespace WPinternals
         {
             Partition Target = GPT.GetPartition(PartitionName);
             if (Target == null)
-            {
                 throw new InvalidOperationException("Partitionname is not found!");
-            }
-
             int ChunkIndex = GetChunkIndexFromSectorIndex((int)Target.FirstSector);
-            return ChunkIndexes[ChunkIndex] != null;
+            return (ChunkIndexes[ChunkIndex] != null);
         }
 
         private int GetChunkIndexFromSectorIndex(ulong p)
@@ -455,13 +420,10 @@ namespace WPinternals
                 if (Offset != null)
                 {
                     uint Start = (uint)Offset + 10;
-                    uint Length = (uint)ByteOperations.FindPattern(Data, Start, 0x100, [0x00], null, null) - Start;
-                    uint? Offset0D = ByteOperations.FindPattern(Data, Start, 0x100, [0x0D], null, null);
+                    uint Length = (uint)ByteOperations.FindPattern(Data, Start, 0x100, new byte[] { 0x00 }, null, null) - Start;
+                    uint? Offset0D = ByteOperations.FindPattern(Data, Start, 0x100, new byte[] { 0x0D }, null, null);
                     if ((Offset0D != null) && (Offset0D < (Start + Length)))
-                    {
                         Length = (uint)Offset0D - Start;
-                    }
-
                     Result = ByteOperations.ReadAsciiString(Data, Start, Length);
                 }
             }
@@ -472,15 +434,15 @@ namespace WPinternals
         internal string GetOSVersion()
         {
             byte[] efiesp = GetPartition("EFIESP");
-            MemoryStream s = new(efiesp);
-            DiscUtils.Fat.FatFileSystem fs = new(s);
-            Stream mss = fs.OpenFile(@"\Windows\System32\Boot\mobilestartup.efi", FileMode.Open, FileAccess.Read);
-            MemoryStream msms = new();
+            MemoryStream s = new MemoryStream(efiesp);
+            DiscUtils.Fat.FatFileSystem fs = new DiscUtils.Fat.FatFileSystem(s);
+            Stream mss = fs.OpenFile(@"Windows\System32\Boot\mobilestartup.efi", FileMode.Open, FileAccess.Read);
+            MemoryStream msms = new MemoryStream();
             mss.CopyTo(msms);
             byte[] mobilestartup = msms.ToArray();
             Version OSVersion = PE.GetProductVersion(mobilestartup);
             s.Close();
-
+            
             return OSVersion.ToString();
         }
     }

@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2018, Rene Lergner - @Heathcliff74xda
+﻿// Copyright (c) 2018, Rene Lergner - wpinternals.net - @Heathcliff74xda
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
 // copy of this software and associated documentation files (the "Software"),
@@ -26,7 +26,7 @@ namespace WPinternals
 {
     internal class QualcommDownload
     {
-        private readonly QualcommSerial Serial;
+        private QualcommSerial Serial;
 
         public QualcommDownload(QualcommSerial Serial)
         {
@@ -37,7 +37,7 @@ namespace WPinternals
         {
             try
             {
-                Serial.SendCommand([0x06], [0x02]);
+                Serial.SendCommand(new byte[] { 0x06 }, new byte[] { 0x02 });
                 return true;
             }
             catch
@@ -48,7 +48,11 @@ namespace WPinternals
 
         public void SendToPhoneMemory(UInt32 Address, Stream Data, UInt32 Length = UInt32.MaxValue)
         {
-            long Remaining = Length > (Data.Length - Data.Position) ? Data.Length - Data.Position : Length;
+            long Remaining;
+            if (Length > (Data.Length - Data.Position))
+                Remaining = Data.Length - Data.Position;
+            else
+                Remaining = Length;
             UInt32 CurrentLength;
             byte[] Buffer = new byte[0x107];
             Buffer[0] = 0x0F;
@@ -58,10 +62,12 @@ namespace WPinternals
             {
                 System.Buffer.BlockCopy(BitConverter.GetBytes(CurrentAddress).Reverse().ToArray(), 0, Buffer, 1, 4); // Address is in Big Endian
 
-                CurrentLength = Remaining >= 0x100 ? 0x100 : (UInt32)Remaining;
-
-                CurrentLength = (UInt32)Data.Read(Buffer, 7, (int)CurrentLength);
-                Serial.SendCommand(Buffer, [0x02]);
+                if (Remaining >= 0x100)
+                    CurrentLength = 0x100;
+                else
+                    CurrentLength = (UInt32)Remaining;
+                CurrentLength = (UInt32)(Data.Read(Buffer, 7, (int)CurrentLength));
+                Serial.SendCommand(Buffer, new byte[] { 0x02 });
 
                 CurrentAddress += CurrentLength;
                 Remaining -= CurrentLength;
@@ -72,12 +78,11 @@ namespace WPinternals
         {
             long Remaining;
             if (Offset > (Data.Length - 1))
-            {
                 throw new ArgumentException("Wrong offset");
-            }
-
-            Remaining = Length > (Data.Length - Offset) ? Data.Length - Offset : Length;
-
+            if (Length > (Data.Length - Offset))
+                Remaining = Data.Length - Offset;
+            else
+                Remaining = Length;
             UInt32 CurrentLength;
             UInt32 CurrentOffset = Offset;
             byte[] Buffer = new byte[0x107];
@@ -85,6 +90,7 @@ namespace WPinternals
             byte[] CurrentBytes;
             while (Remaining > 0)
             {
+
                 if (Remaining >= 0x100)
                 {
                     CurrentLength = 0x100;
@@ -100,7 +106,7 @@ namespace WPinternals
                 System.Buffer.BlockCopy(BitConverter.GetBytes((UInt16)CurrentLength).Reverse().ToArray(), 0, CurrentBytes, 5, 2); // Length is in Big Endian
                 System.Buffer.BlockCopy(Data, (int)CurrentOffset, CurrentBytes, 7, (int)CurrentLength);
 
-                Serial.SendCommand(CurrentBytes, [0x02]);
+                Serial.SendCommand(CurrentBytes, new byte[] { 0x02 });
 
                 CurrentAddress += CurrentLength;
                 CurrentOffset += CurrentLength;
@@ -113,25 +119,25 @@ namespace WPinternals
             byte[] Buffer = new byte[5];
             Buffer[0] = 0x05;
             System.Buffer.BlockCopy(BitConverter.GetBytes(Address).Reverse().ToArray(), 0, Buffer, 1, 4); // Address is in Big Endian
-            Serial.SendCommand(Buffer, [0x02]);
+            Serial.SendCommand(Buffer, new byte[] { 0x02 });
         }
 
         // Reset interface. Interface becomes unresponsive.
         public void Reset()
         {
-            Serial.SendCommand([0x0A], [0x02]);
+            Serial.SendCommand(new byte[] { 0x0A }, new byte[] { 0x02 });
         }
 
         // This also resets interface. This does not actually reboot the phone. The interface becomes unresponsive.
         public void Shutdown()
         {
-            Serial.SendCommand([0x0E], [0x02]);
+            Serial.SendCommand(new byte[] { 0x0E }, new byte[] { 0x02 });
         }
 
         // This command only works on 9008 interface.
         public byte[] GetRKH()
         {
-            byte[] Response = Serial.SendCommand([0x18], [0x18, 0x01, 0x00]);
+            byte[] Response = Serial.SendCommand(new byte[] { 0x18 }, new byte[] { 0x18, 0x01, 0x00 });
             byte[] Result = new byte[0x20];
             Buffer.BlockCopy(Response, 3, Result, 0, 0x20);
             return Result;
